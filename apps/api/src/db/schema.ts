@@ -38,6 +38,8 @@ export const projects = pgTable(
       .notNull()
       .references(() => authUsers.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
+    // The intake answers this project was created from (@trestle/shared Requirements).
+    requirements: jsonb('requirements').notNull(),
     // Points at the latest accepted version. Null only briefly while creating a project.
     currentVersionId: uuid('current_version_id').references((): AnyPgColumn => designVersions.id, {
       onDelete: 'set null',

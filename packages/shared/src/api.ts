@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { designSchema } from './design';
+import { requirementsSchema } from './requirements';
 
 /** Body of every non-2xx API response. */
 export const apiErrorSchema = z.object({
@@ -33,3 +35,28 @@ export const listProjectsResponseSchema = z.object({
 });
 
 export type ListProjectsResponse = z.infer<typeof listProjectsResponseSchema>;
+
+/** `POST /projects`: create a project from the intake form. */
+export const createProjectRequestSchema = z.object({
+  requirements: requirementsSchema,
+});
+
+export type CreateProjectRequest = z.infer<typeof createProjectRequestSchema>;
+
+export const designVersionSchema = z.object({
+  id: z.uuid(),
+  versionNumber: z.number().int().positive(),
+  changeSummary: z.string().nullable(),
+  createdAt: z.iso.datetime({ offset: true }),
+  design: designSchema,
+});
+
+export type DesignVersion = z.infer<typeof designVersionSchema>;
+
+/** `GET /projects/:id` and the body returned by `POST /projects`. */
+export const projectDetailSchema = projectSummarySchema.extend({
+  requirements: requirementsSchema,
+  currentVersion: designVersionSchema,
+});
+
+export type ProjectDetail = z.infer<typeof projectDetailSchema>;

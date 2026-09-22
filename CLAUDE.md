@@ -83,7 +83,29 @@ Phase 5 (end-to-end auth tests) is done:
   repo secrets `TEST_DATABASE_URL`, `TEST_SUPABASE_URL`,
   `TEST_SUPABASE_SECRET_KEY`, `TEST_SUPABASE_PUBLISHABLE_KEY`).
 
-Next phase: main feature implementation (frontend + backend together).
+Phase 6 (main features) runs in steps: 6.1 design contract + intake ✅ ·
+6.2 canvas · 6.3 reference library + retrieval · 6.4 grounded generation ·
+6.5 edits + version history · 6.6 change requests (suggest-first diffs) ·
+6.7 industry comparison · 6.8 cost & traffic. Cross-cutting decisions:
+- Design JSON contract lives in `packages/shared/src/design.ts`
+  (`schemaVersion` 1, components/connections/dataModel, `sources[]` per
+  component for grounding, node positions inside the design so versions capture
+  layout). Referential integrity is enforced in the schema itself.
+- Requirements (intake answers) are stored in `projects.requirements`, one
+  current set per project. `RequirementsInput` = pre-validation form type.
+- Reference library: hand-curated pattern summaries first (written in our own
+  words with source notes), automated ingestion later. Industry comparisons are
+  curated library entries, not free-form AI output.
+- Frontend server state: TanStack Query (`lib/queries.ts`, keys in `queryKeys`).
+  Forms: React Hook Form + the shared Zod schemas.
+- AI (from 6.4): structured JSON output validated with Zod, one retry, clear
+  error rather than saving a broken design; per-user daily cap on AI actions;
+  rationale without `sources[]` is shown as "ungrounded".
+- Step 6.1 note: `POST /projects` stores a clearly-labelled placeholder design
+  as version 1 (`design.origin === 'placeholder'`, `designs/placeholder-design.ts`).
+  Real generation replaces it in 6.4.
+- e2e note: choice chips are labels wrapping a visually hidden radio, so
+  Playwright must click the visible label text, not `getByLabel`.
 
 TypeScript is pinned to `~6.0.x` because typescript-eslint doesn't support
 TypeScript 7 yet; revisit when it does. `@types/node` tracks Node 24.

@@ -1,32 +1,12 @@
-import { useEffect, useState } from 'react';
-import { listProjectsResponseSchema, type ProjectSummary } from '@trestle/shared';
+import { type ProjectSummary } from '@trestle/shared';
 import { LoaderCircle, Network, Plus } from 'lucide-react';
 import { Link } from 'react-router';
 import { Button } from '@/components/ui/button';
-import { apiGet } from '@/lib/api';
 import { paths } from '@/lib/paths';
-
-type ProjectsState =
-  | { status: 'loading' }
-  | { status: 'error'; message: string }
-  | { status: 'ready'; projects: ProjectSummary[] };
+import { useProjects } from '@/lib/queries';
 
 export function DesignsPage() {
-  const [state, setState] = useState<ProjectsState>({ status: 'loading' });
-
-  useEffect(() => {
-    const controller = new AbortController();
-    apiGet('/projects', listProjectsResponseSchema, { signal: controller.signal })
-      .then(({ projects }) => setState({ status: 'ready', projects }))
-      .catch((err: unknown) => {
-        if (controller.signal.aborted) return;
-        setState({
-          status: 'error',
-          message: err instanceof Error ? err.message : 'Could not load your designs.',
-        });
-      });
-    return () => controller.abort();
-  }, []);
+  const { data, isPending, error } = useProjects();
 
   return (
     <div className="flex-1 overflow-y-auto">
@@ -48,25 +28,25 @@ export function DesignsPage() {
         </div>
 
         <div className="mt-10">
-          {state.status === 'loading' && (
+          {isPending && (
             <div className="flex justify-center py-16" role="status">
               <LoaderCircle className="size-6 animate-spin text-brand" aria-hidden="true" />
               <span className="sr-only">Loading your designs…</span>
             </div>
           )}
-          {state.status === 'error' && (
+          {error && (
             <p
               role="alert"
               className="rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger"
             >
-              Couldn't load your designs: {state.message}
+              Couldn't load your designs: {error.message}
             </p>
           )}
-          {state.status === 'ready' &&
-            (state.projects.length === 0 ? (
+          {data &&
+            (data.projects.length === 0 ? (
               <EmptyState />
             ) : (
-              <ProjectList projects={state.projects} />
+              <ProjectList projects={data.projects} />
             ))}
         </div>
       </div>

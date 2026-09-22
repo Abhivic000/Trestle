@@ -17,32 +17,56 @@ export class ApiError extends Error {
 
 interface RequestOptions {
   signal?: AbortSignal;
+  method?: 'GET' | 'POST';
+  body?: unknown;
 }
 
 /**
- * GET a Trestle API endpoint as the signed-in user and validate the response
+ * Calls a Trestle API endpoint as the signed-in user and validates the response
  * against a shared schema, so a contract mismatch fails loudly here.
  */
-export async function apiGet<T>(
+async function apiRequest<T>(
   path: string,
   schema: z.ZodType<T>,
-  { signal }: RequestOptions = {},
+  { signal, method = 'GET', body }: RequestOptions = {},
 ): Promise<T> {
   // Returns the current session, refreshing the access token first if it's about to expire.
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
 
   const response = await fetch(`${env.VITE_API_URL}${path}`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    method,
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
+    },
+    body: body === undefined ? undefined : JSON.stringify(body),
     signal,
   });
-  const body: unknown = await response.json().catch(() => null);
+  const responseBody: unknown = await response.json().catch(() => null);
 
   if (!response.ok) {
-    const parsed = apiErrorSchema.safeParse(body);
+    const parsed = apiErrorSchema.safeParse(responseBody);
     throw parsed.success
       ? new ApiError(response.status, parsed.data.error.code, parsed.data.error.message)
       : new ApiError(response.status, 'http_error', `Request failed (${response.status})`);
   }
-  return schema.parse(body);
+  return schema.parse(responseBody);
+}
+
+export function apiGet<T>(
+  path: string,
+  schema: z.ZodType<T>,
+  options: { signal?: AbortSignal } = {},
+): Promise<T> {
+  return apiRequest(path, schema, options);
+}
+
+export function apiPost<T>(
+  path: string,
+  body: unknown,
+  schema: z.ZodType<T>,
+  options: { signal?: AbortSignal } = {},
+): Promise<T> {
+  return apiRequest(path, schema, { ...options, method: 'POST', body });
 }

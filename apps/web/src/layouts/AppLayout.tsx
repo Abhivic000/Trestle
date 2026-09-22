@@ -18,7 +18,8 @@ export function AppLayout() {
   return (
     <div className="flex h-dvh flex-col">
       <header className="flex h-15 shrink-0 items-center justify-between border-b border-subtle px-4 sm:px-6">
-        <Link to={paths.designs} aria-label="My designs">
+        {/* Distinct accessible name from the "My designs" nav link below. */}
+        <Link to={paths.designs} aria-label="Trestle home">
           <Logo className="text-sm" markClassName="size-6" />
         </Link>
         <nav aria-label="App" className="flex items-center gap-4">
