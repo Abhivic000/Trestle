@@ -57,7 +57,33 @@ Phase 4 (auth + backend skeleton) is done:
   from the owner's machine. That's network distance, not code.
 - `docs/` is intentionally git-ignored (owner keeps planning docs private).
 
-Next phase: test that auth works end-to-end (automated tests).
+Phase 5 (end-to-end auth tests) is done:
+- Vitest 5 at the repo root (`vitest.config.ts`) with projects `shared`,
+  `api:unit`, `api:integration` (`*.int.test.ts`, real DB + Supabase auth) and
+  `web` (jsdom + Testing Library). Playwright (`playwright.config.ts`, `e2e/`)
+  drives installed Edge locally, Chromium in CI. `pnpm test`, `pnpm test:unit`,
+  `pnpm test:e2e`.
+- Tests use a SEPARATE free Supabase project, `trestle-test`, configured in
+  `apps/api/.env.test` and `apps/web/.env.test` (git-ignored; see the
+  `.env.test.example` files). `test-support/test-env.ts` refuses to run if a
+  test env file shares a Supabase project id with the dev `.env`. Test servers
+  use ports 4001 (API) / 5174 (web). E2E users are prefixed `e2e-` and swept
+  before and after each run. `pnpm --filter @trestle/api db:migrate:test`
+  migrates the test DB.
+- The API no longer loads `.env` itself: launch scripts pass `--env-file`
+  (`dev`, `dev:test`, `start`). drizzle-kit auto-loads `.env`, so the drizzle
+  config reads its file explicitly (`drizzle.config.shared.ts`); never rely on
+  process.env there.
+- Auth redirects: `RedirectIfAuthenticated` honours `location.state.from` via
+  `postSignInPath()` (`auth/redirect.ts`), because it fires as soon as the
+  session updates. Sign-out navigates home BEFORE clearing the session.
+- `apps/web/src/test/jest-dom-vitest.d.ts` is a temporary type bridge (jest-dom
+  v7 doesn't type Vitest 5's `Matchers<R, T>` yet). Delete when jest-dom updates.
+- CI: `.github/workflows/ci.yml` (checks job, then integration + e2e job using
+  repo secrets `TEST_DATABASE_URL`, `TEST_SUPABASE_URL`,
+  `TEST_SUPABASE_SECRET_KEY`, `TEST_SUPABASE_PUBLISHABLE_KEY`).
+
+Next phase: main feature implementation (frontend + backend together).
 
 TypeScript is pinned to `~6.0.x` because typescript-eslint doesn't support
 TypeScript 7 yet; revisit when it does. `@types/node` tracks Node 24.

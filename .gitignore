@@ -14,6 +14,7 @@ build/
 .env
 .env.*
 !.env.example
+!.env.test.example
 
 # Logs
 *.log
@@ -29,5 +30,8 @@ pnpm-debug.log*
 Thumbs.db
 desktop.ini
 
-# Test coverage
+# Test output
 coverage/
+test-results/
+playwright-report/
+blob-report/

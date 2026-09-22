@@ -1,16 +1,13 @@
-import { existsSync } from 'node:fs';
 import { z } from 'zod';
 
-// Load apps/api/.env into process.env using Node's built-in loader (no extra
-// dependency). In production, variables come from the host instead of a file.
-if (existsSync('.env')) {
-  process.loadEnvFile('.env');
-}
+// Configuration comes from environment variables only. *How* they get there is
+// the launcher's job: `--env-file=.env` for dev, `.env.test` for tests, the
+// hosting platform's settings in production. See the scripts in package.json.
 
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(4000),
-  LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
+  LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   WEB_ORIGIN: z.url().default('http://localhost:5173'),
   DATABASE_URL: z
     .url()
@@ -32,7 +29,7 @@ function loadEnv(): Env {
     const problems = result.error.issues
       .map((issue) => `  - ${issue.path.join('.')}: ${issue.message}`)
       .join('\n');
-    console.error(`Invalid environment configuration (check apps/api/.env):\n${problems}`);
+    console.error(`Invalid environment configuration (check your .env file):\n${problems}`);
     process.exit(1);
   }
   return result.data;

@@ -79,6 +79,43 @@ pnpm dev
 | `pnpm lint`         | ESLint (`pnpm lint:fix` to auto-fix)     |
 | `pnpm format`       | Format all files with Prettier           |
 | `pnpm format:check` | Verify formatting without changing files |
+| `pnpm test`         | All Vitest tests (unit + integration)    |
+| `pnpm test:unit`    | Unit and component tests only (offline)  |
+| `pnpm test:e2e`     | Playwright browser tests                 |
+
+## Testing
+
+| Layer       | Tool                             | Where                       | Needs `.env.test` |
+| ----------- | -------------------------------- | --------------------------- | ----------------- |
+| Unit        | Vitest (+ Supertest)             | `**/*.test.ts`              | No                |
+| Component   | Vitest + Testing Library (jsdom) | `apps/web/**/*.test.tsx`    | No                |
+| Integration | Vitest + Supertest, real DB/auth | `apps/api/**/*.int.test.ts` | Yes               |
+| Browser     | Playwright (Edge locally)        | `e2e/*.spec.ts`             | Yes               |
+
+Integration and browser tests run against a **separate Supabase project**
+(`trestle-test`), never the dev one. They create and delete users freely, and
+the test runners refuse to start if `.env.test` points at the same project as
+`.env`.
+
+One-time setup:
+
+1. Create the `trestle-test` Supabase project (Authentication → Email:
+   "Confirm email" off).
+2. Copy `apps/api/.env.test.example` → `apps/api/.env.test` and
+   `apps/web/.env.test.example` → `apps/web/.env.test`, and fill in its values.
+3. `pnpm --filter @trestle/api db:migrate:test` to create its tables.
+
+Browser tests start their own API (port 4001) and web app (port 5174), so a
+running dev server doesn't interfere.
+
+### CI
+
+`.github/workflows/ci.yml` runs on every push to `main` and every pull request:
+format, lint, typecheck, build and unit tests, then integration and browser
+tests against `trestle-test`. The second job needs these repository secrets
+(GitHub → Settings → Secrets and variables → Actions):
+`TEST_DATABASE_URL`, `TEST_SUPABASE_URL`, `TEST_SUPABASE_SECRET_KEY`,
+`TEST_SUPABASE_PUBLISHABLE_KEY`.
 
 ## Commit conventions
 

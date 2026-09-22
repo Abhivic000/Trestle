@@ -1,12 +1,11 @@
 import { useState, type FormEvent } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router';
 import { z } from 'zod';
-import type { RedirectState } from '@/auth/route-guards';
+import { postSignInPath, type RedirectState } from '@/auth/redirect';
 import { useAuth } from '@/auth/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { paths } from '@/lib/paths';
 
 const MIN_PASSWORD_LENGTH = 8; // keep in sync with Supabase → Auth → minimum password length
 
@@ -86,8 +85,9 @@ export function AuthForm({
       } else {
         await signIn(email, password);
       }
-      // Back to the page that sent them here, or their designs.
-      await navigate(redirectState?.from ?? paths.designs, { replace: true });
+      // Back to the page that sent them here, or their designs. (RedirectIfAuthenticated
+      // usually gets there first, when the session updates; both use postSignInPath.)
+      await navigate(postSignInPath(redirectState), { replace: true });
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
     } finally {

@@ -1,0 +1,92 @@
+# Runs on every push to main and every pull request.
+# Job 1 needs no secrets. Job 2 uses the separate trestle-test Supabase project,
+# whose keys are stored as encrypted GitHub Actions secrets (see README).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+# A newer push to the same branch cancels the older, now-pointless run.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Format, lint, typecheck, build, unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6 # version comes from "packageManager" in package.json
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm format:check
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm build
+      - run: pnpm test:unit
+
+  integration:
+    name: Integration + browser tests (trestle-test)
+    needs: checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Write .env.test files from secrets
+        env:
+          TEST_DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
+          TEST_SUPABASE_URL: ${{ secrets.TEST_SUPABASE_URL }}
+          TEST_SUPABASE_SECRET_KEY: ${{ secrets.TEST_SUPABASE_SECRET_KEY }}
+          TEST_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.TEST_SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          {
+            echo "PORT=4001"
+            echo "WEB_ORIGIN=http://localhost:5174"
+            echo "DATABASE_URL=$TEST_DATABASE_URL"
+            echo "SUPABASE_URL=$TEST_SUPABASE_URL"
+            echo "SUPABASE_SECRET_KEY=$TEST_SUPABASE_SECRET_KEY"
+            echo "SUPABASE_PUBLISHABLE_KEY=$TEST_SUPABASE_PUBLISHABLE_KEY"
+            echo "GEMINI_API_KEY=unused-in-tests"
+          } > apps/api/.env.test
+          {
+            echo "VITE_API_URL=http://localhost:4001"
+            echo "VITE_SUPABASE_URL=$TEST_SUPABASE_URL"
+            echo "VITE_SUPABASE_PUBLISHABLE_KEY=$TEST_SUPABASE_PUBLISHABLE_KEY"
+          } > apps/web/.env.test
+
+      - name: Bring the test database schema up to date
+        run: pnpm --filter @trestle/api db:migrate:test
+
+      - name: API integration tests
+        run: pnpm vitest run --project api:integration
+
+      - name: Install Playwright's Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Browser tests
+        run: pnpm test:e2e
+
+      - name: Upload browser test report
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7

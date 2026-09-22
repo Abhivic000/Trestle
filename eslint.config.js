@@ -30,7 +30,13 @@ export default defineConfig([
 
   // Node.js code: root config files, the API, shared package.
   {
-    files: ['*.{js,mjs,cjs}', 'apps/api/**/*.ts', 'packages/**/*.ts'],
+    files: [
+      '*.{js,mjs,cjs,ts}',
+      'apps/api/**/*.ts',
+      'packages/**/*.ts',
+      'e2e/**/*.ts',
+      'test-support/**/*.ts',
+    ],
     languageOptions: { globals: globals.node },
   },
 

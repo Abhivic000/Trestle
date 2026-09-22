@@ -50,8 +50,10 @@ function UserMenu() {
   const email = user?.email ?? 'Account';
 
   async function handleSignOut() {
-    await signOut();
+    // Leave the protected area first: if the session cleared while a guarded page
+    // was still showing, RequireAuth would bounce us to /login instead of home.
     await navigate(paths.home);
+    await signOut();
   }
 
   return (
