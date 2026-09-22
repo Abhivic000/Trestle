@@ -1,0 +1,165 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
+@import '@fontsource-variable/inter';
+@import '@fontsource-variable/jetbrains-mono';
+
+/* Trestle is dark-only. The `dark` class is set on <html> so shadcn/ui's
+   `dark:` styles always apply. */
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Design tokens: the single source of truth for colours, fonts and radii.
+ * Raw Trestle palette first, then the semantic names shadcn/ui components use
+ * (background, primary, muted, ...) mapped onto it.
+ */
+:root {
+  /* Trestle palette */
+  --trestle-bg: #0b0d12;
+  --trestle-bg-secondary: #12141c;
+  --trestle-bg-elevated: #1a1d28;
+  --trestle-bg-elevated-2: #20232f;
+  --trestle-border: #262a38;
+  --trestle-border-subtle: #1e212c;
+  --trestle-text: #f3f4f8;
+  --trestle-text-secondary: #9aa0b4;
+  --trestle-text-tertiary: #5d6377;
+  --trestle-accent: #6c5ce7;
+  --trestle-accent-hover: #7d6ff0;
+  --trestle-accent-subtle: #1e1b34;
+  --trestle-accent-soft: #b9aeff;
+  --trestle-success: #3ecf8e;
+  --trestle-warning: #f2b84b;
+  --trestle-danger: #f0616d;
+
+  /* shadcn/ui semantic tokens */
+  --background: var(--trestle-bg);
+  --foreground: var(--trestle-text);
+  --card: var(--trestle-bg-elevated);
+  --card-foreground: var(--trestle-text);
+  --popover: var(--trestle-bg-elevated);
+  --popover-foreground: var(--trestle-text);
+  --primary: var(--trestle-accent);
+  --primary-foreground: #ffffff;
+  --secondary: var(--trestle-bg-elevated);
+  --secondary-foreground: var(--trestle-text);
+  --muted: var(--trestle-bg-elevated-2);
+  --muted-foreground: var(--trestle-text-secondary);
+  --accent: var(--trestle-bg-elevated-2);
+  --accent-foreground: var(--trestle-text);
+  --destructive: var(--trestle-danger);
+  --border: var(--trestle-border);
+  --input: var(--trestle-border);
+  --ring: var(--trestle-accent);
+  --radius: 0.625rem;
+
+  --chart-1: var(--trestle-accent);
+  --chart-2: var(--trestle-success);
+  --chart-3: var(--trestle-warning);
+  --chart-4: var(--trestle-danger);
+  --chart-5: var(--trestle-accent-soft);
+
+  --sidebar: var(--trestle-bg-secondary);
+  --sidebar-foreground: var(--trestle-text);
+  --sidebar-primary: var(--trestle-accent);
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: var(--trestle-bg-elevated);
+  --sidebar-accent-foreground: var(--trestle-text);
+  --sidebar-border: var(--trestle-border-subtle);
+  --sidebar-ring: var(--trestle-accent);
+}
+
+@theme inline {
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-heading: var(--font-sans);
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, monospace;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Trestle-specific utilities, e.g. `bg-elevated`, `text-tertiary`, `border-subtle`. */
+  --color-surface: var(--trestle-bg-secondary);
+  --color-elevated: var(--trestle-bg-elevated);
+  --color-elevated-2: var(--trestle-bg-elevated-2);
+  --color-subtle: var(--trestle-border-subtle);
+  --color-secondary-text: var(--trestle-text-secondary);
+  --color-tertiary: var(--trestle-text-tertiary);
+  --color-brand: var(--trestle-accent);
+  --color-brand-hover: var(--trestle-accent-hover);
+  --color-brand-subtle: var(--trestle-accent-subtle);
+  --color-brand-soft: var(--trestle-accent-soft);
+  --color-success: var(--trestle-success);
+  --color-warning: var(--trestle-warning);
+  --color-danger: var(--trestle-danger);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+}
+
+/* Blueprint grid backgrounds (the schematic motif). */
+@utility bg-blueprint {
+  background-image:
+    linear-gradient(rgb(108 92 231 / 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(108 92 231 / 0.06) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+@utility bg-canvas-grid {
+  background-color: var(--trestle-bg);
+  background-image:
+    linear-gradient(var(--trestle-bg-secondary) 1px, transparent 1px),
+    linear-gradient(90deg, var(--trestle-bg-secondary) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}

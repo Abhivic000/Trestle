@@ -41,6 +41,13 @@ export default defineConfig([
     languageOptions: { globals: globals.browser },
   },
 
+  // shadcn/ui-generated components export style helpers (e.g. buttonVariants)
+  // next to the component by design.
+  {
+    files: ['apps/web/src/components/ui/**/*.tsx'],
+    rules: { 'react-refresh/only-export-components': 'off' },
+  },
+
   // Must be last: turns off style rules that would fight with Prettier.
   prettier,
 ]);

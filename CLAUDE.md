@@ -26,8 +26,16 @@ Phases 1 (environment) and 2 (project structure) are done. The repo is a pnpm
 monorepo: `apps/web` (React + Vite), `apps/api` (Express, built with tsup),
 `packages/shared` (types + Zod schemas, shipped as TS source). ESLint (type-aware)
 + Prettier, Husky pre-commit (lint-staged) and commit-msg (commitlint,
-Conventional Commits) hooks, env validation with Zod in both apps. Next phase:
-landing page / frontend shell (Tailwind, theme, routing).
+Conventional Commits) hooks, env validation with Zod in both apps.
+
+Phase 3 (landing page / frontend shell) is done: Tailwind v4 theme tokens in
+`apps/web/src/styles/index.css` (Trestle palette mapped onto shadcn/ui token
+names), shadcn/ui (Radix base, "nova" preset; generated components in
+`components/ui` import `cn` from shadcn's `cn` package), React Router 8 data
+router (`router.tsx`, URLs centralised in `lib/paths.ts`), landing page, auth
+page shells, "My designs", intake and canvas placeholders, 404 and error pages.
+Design reference: the owner's landing.html / prototype.html mockups.
+Next phase: authentication + backend skeleton.
 
 TypeScript is pinned to `~6.0.x` because typescript-eslint doesn't support
 TypeScript 7 yet; revisit when it does. `@types/node` tracks Node 24.
