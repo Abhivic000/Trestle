@@ -1,14 +1,25 @@
 import { createApp } from './app';
 import { env } from './config/env';
+import { sql } from './db/client';
+import { logger } from './logger';
 
 const server = createApp().listen(env.PORT, () => {
-  console.log(`API listening on http://localhost:${env.PORT} (${env.NODE_ENV})`);
+  logger.info(`API listening on http://localhost:${env.PORT} (${env.NODE_ENV})`);
 });
 
-// Graceful shutdown: stop accepting new requests, let in-flight ones finish, then exit.
+// Graceful shutdown: stop accepting new requests, let in-flight ones finish,
+// close database connections, then exit.
 function shutdown(signal: string) {
-  console.log(`${signal} received, shutting down`);
-  server.close(() => process.exit(0));
+  logger.info(`${signal} received, shutting down`);
+  server.close(() => {
+    sql
+      .end({ timeout: 5 })
+      .then(() => process.exit(0))
+      .catch((err: unknown) => {
+        logger.error({ err }, 'Error closing database connections');
+        process.exit(1);
+      });
+  });
   setTimeout(() => process.exit(1), 10_000).unref(); // force-exit if something hangs
 }
 

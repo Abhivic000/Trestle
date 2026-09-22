@@ -35,7 +35,29 @@ names), shadcn/ui (Radix base, "nova" preset; generated components in
 router (`router.tsx`, URLs centralised in `lib/paths.ts`), landing page, auth
 page shells, "My designs", intake and canvas placeholders, 404 and error pages.
 Design reference: the owner's landing.html / prototype.html mockups.
-Next phase: authentication + backend skeleton.
+
+Phase 4 (auth + backend skeleton) is done:
+- Auth: Supabase email + password, email confirmation OFF (free built-in SMTP
+  only reaches team members, 2 emails/hour). Project uses ECC (asymmetric) JWT
+  signing keys, so the API verifies tokens locally via `supabase.auth.getClaims()`
+  in `apps/api/src/auth/require-auth.ts` (sets `req.user`; use `currentUser(req)`).
+- Data isolation: the API connects as the DB owner (Drizzle + postgres.js via the
+  Supabase session pooler, `DATABASE_URL`) and MUST scope every query to
+  `currentUser(req).id`. RLS is enabled on every table with no policies, so the
+  browser's publishable key can't read or write tables directly (verified: 403).
+- DB: Drizzle schema in `apps/api/src/db/schema.ts`, migrations in
+  `apps/api/drizzle/` (`db:generate` → review SQL → `db:migrate`). Tables:
+  `projects`, `design_versions`. Pending diffs and corpus tables come in Phase 6.
+- API: pino/pino-http one-line request logs with request ids, auth header
+  redacted. Routes: `GET /health` (public), `GET /me`, `GET /projects`.
+- Web: `AuthProvider` + `useAuth`, `RequireAuth` / `RedirectIfAuthenticated`
+  route guards, `apiGet()` in `lib/api.ts` attaches the token and validates
+  responses with shared Zod schemas.
+- Supabase project region is Tokyo (ap-northeast-1): ~280ms per warm DB query
+  from the owner's machine. That's network distance, not code.
+- `docs/` is intentionally git-ignored (owner keeps planning docs private).
+
+Next phase: test that auth works end-to-end (automated tests).
 
 TypeScript is pinned to `~6.0.x` because typescript-eslint doesn't support
 TypeScript 7 yet; revisit when it does. `@types/node` tracks Node 24.

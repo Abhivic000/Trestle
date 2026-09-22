@@ -1,9 +1,33 @@
-import { Network, Plus } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { listProjectsResponseSchema, type ProjectSummary } from '@trestle/shared';
+import { LoaderCircle, Network, Plus } from 'lucide-react';
 import { Link } from 'react-router';
 import { Button } from '@/components/ui/button';
+import { apiGet } from '@/lib/api';
 import { paths } from '@/lib/paths';
 
+type ProjectsState =
+  | { status: 'loading' }
+  | { status: 'error'; message: string }
+  | { status: 'ready'; projects: ProjectSummary[] };
+
 export function DesignsPage() {
+  const [state, setState] = useState<ProjectsState>({ status: 'loading' });
+
+  useEffect(() => {
+    const controller = new AbortController();
+    apiGet('/projects', listProjectsResponseSchema, { signal: controller.signal })
+      .then(({ projects }) => setState({ status: 'ready', projects }))
+      .catch((err: unknown) => {
+        if (controller.signal.aborted) return;
+        setState({
+          status: 'error',
+          message: err instanceof Error ? err.message : 'Could not load your designs.',
+        });
+      });
+    return () => controller.abort();
+  }, []);
+
   return (
     <div className="flex-1 overflow-y-auto">
       <title>My designs · Trestle</title>
@@ -23,20 +47,66 @@ export function DesignsPage() {
           </Button>
         </div>
 
-        {/* Empty state. The real list comes from the API in the main feature phase. */}
-        <div className="bg-blueprint mt-10 flex flex-col items-center rounded-2xl border border-dashed px-6 py-16 text-center">
-          <span className="flex size-11 items-center justify-center rounded-xl bg-brand-subtle text-brand-soft">
-            <Network className="size-5" aria-hidden="true" />
-          </span>
-          <h2 className="mt-5 font-semibold">No designs yet</h2>
-          <p className="mt-1.5 max-w-sm text-sm text-muted-foreground">
-            Describe a project and Trestle will generate your first architecture.
-          </p>
-          <Button asChild variant="outline" size="lg" className="mt-6">
-            <Link to={paths.newDesign}>Start a new design</Link>
-          </Button>
+        <div className="mt-10">
+          {state.status === 'loading' && (
+            <div className="flex justify-center py-16" role="status">
+              <LoaderCircle className="size-6 animate-spin text-brand" aria-hidden="true" />
+              <span className="sr-only">Loading your designs…</span>
+            </div>
+          )}
+          {state.status === 'error' && (
+            <p
+              role="alert"
+              className="rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger"
+            >
+              Couldn't load your designs: {state.message}
+            </p>
+          )}
+          {state.status === 'ready' &&
+            (state.projects.length === 0 ? (
+              <EmptyState />
+            ) : (
+              <ProjectList projects={state.projects} />
+            ))}
         </div>
       </div>
+    </div>
+  );
+}
+
+function ProjectList({ projects }: { projects: ProjectSummary[] }) {
+  return (
+    <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {projects.map((project) => (
+        <li key={project.id}>
+          <Link
+            to={paths.design(project.id)}
+            className="block rounded-2xl border bg-elevated p-5 transition-colors hover:border-[#3a3f55]"
+          >
+            <h2 className="truncate font-semibold">{project.name}</h2>
+            <p className="mt-1 text-xs text-tertiary">
+              Updated {new Date(project.updatedAt).toLocaleDateString()}
+            </p>
+          </Link>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function EmptyState() {
+  return (
+    <div className="bg-blueprint flex flex-col items-center rounded-2xl border border-dashed px-6 py-16 text-center">
+      <span className="flex size-11 items-center justify-center rounded-xl bg-brand-subtle text-brand-soft">
+        <Network className="size-5" aria-hidden="true" />
+      </span>
+      <h2 className="mt-5 font-semibold">No designs yet</h2>
+      <p className="mt-1.5 max-w-sm text-sm text-muted-foreground">
+        Describe a project and Trestle will generate your first architecture.
+      </p>
+      <Button asChild variant="outline" size="lg" className="mt-6">
+        <Link to={paths.newDesign}>Start a new design</Link>
+      </Button>
     </div>
   );
 }

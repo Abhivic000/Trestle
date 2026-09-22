@@ -1,4 +1,5 @@
 import { createBrowserRouter } from 'react-router';
+import { RedirectIfAuthenticated, RequireAuth } from '@/auth/route-guards';
 import { AppLayout } from '@/layouts/AppLayout';
 import { AuthLayout } from '@/layouts/AuthLayout';
 import { MarketingLayout } from '@/layouts/MarketingLayout';
@@ -12,7 +13,7 @@ import { LandingPage } from '@/pages/landing/LandingPage';
 import { NotFoundPage } from '@/pages/NotFoundPage';
 import { RouteErrorPage } from '@/pages/RouteErrorPage';
 
-// Layout routes (no `path`) wrap groups of pages in shared chrome.
+// Layout routes (no `path`) wrap groups of pages in shared chrome or guards.
 // Keep these patterns in sync with `lib/paths.ts`.
 export const router = createBrowserRouter([
   {
@@ -24,20 +25,31 @@ export const router = createBrowserRouter([
         children: [{ index: true, element: <LandingPage /> }],
       },
       {
-        element: <AuthLayout />,
+        // Signed-in users skip the auth pages.
+        element: <RedirectIfAuthenticated />,
         children: [
-          { path: 'login', element: <LoginPage /> },
-          { path: 'signup', element: <SignupPage /> },
+          {
+            element: <AuthLayout />,
+            children: [
+              { path: 'login', element: <LoginPage /> },
+              { path: 'signup', element: <SignupPage /> },
+            ],
+          },
         ],
       },
       {
-        // Will require a signed-in user once auth lands in Phase 4.
-        path: 'designs',
-        element: <AppLayout />,
+        // Everything under /designs requires a signed-in user.
+        element: <RequireAuth />,
         children: [
-          { index: true, element: <DesignsPage /> },
-          { path: 'new', element: <NewDesignPage /> },
-          { path: ':designId', element: <DesignCanvasPage /> },
+          {
+            path: 'designs',
+            element: <AppLayout />,
+            children: [
+              { index: true, element: <DesignsPage /> },
+              { path: 'new', element: <NewDesignPage /> },
+              { path: ':designId', element: <DesignCanvasPage /> },
+            ],
+          },
         ],
       },
       { path: '*', element: <NotFoundPage /> },
