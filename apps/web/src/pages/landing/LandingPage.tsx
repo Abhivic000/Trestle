@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { ArrowRight, ClipboardList, GitBranch, Network } from 'lucide-react';
 import { Link } from 'react-router';
+import { useAuth } from '@/auth/useAuth';
 import { Button } from '@/components/ui/button';
 import { paths } from '@/lib/paths';
 import { cn } from '@/lib/utils';
@@ -14,6 +15,14 @@ import {
   type MiniEdge,
   type MiniNode,
 } from './mockups';
+
+/** Where the page's calls to action lead, depending on whether you're signed in. */
+function useStartCta() {
+  const { session } = useAuth();
+  return session
+    ? { to: paths.designs, label: 'Open my designs' }
+    : { to: paths.signup, label: 'Start designing free' };
+}
 
 export function LandingPage() {
   return (
@@ -45,6 +54,8 @@ const heroEdges: MiniEdge[] = [
 ];
 
 function Hero() {
+  const cta = useStartCta();
+
   return (
     <section className="relative overflow-hidden pt-20 pb-20 sm:pt-24">
       <div
@@ -66,8 +77,8 @@ function Hero() {
         </p>
         <div className="mt-9 flex flex-wrap gap-3">
           <Button asChild size="lg" className="h-12 px-6 text-[15px] font-semibold">
-            <Link to={paths.signup}>
-              Start designing free
+            <Link to={cta.to}>
+              {cta.label}
               <ArrowRight data-icon="inline-end" />
             </Link>
           </Button>
@@ -309,6 +320,8 @@ function Features() {
 }
 
 function FinalCta() {
+  const cta = useStartCta();
+
   return (
     <section className="relative overflow-hidden py-28 text-center">
       <div
@@ -323,8 +336,8 @@ function FinalCta() {
           Bring your requirements. Leave with an architecture you can defend.
         </p>
         <Button asChild size="lg" className="h-12 px-6 text-[15px] font-semibold">
-          <Link to={paths.signup}>
-            Start designing free
+          <Link to={cta.to}>
+            {cta.label}
             <ArrowRight data-icon="inline-end" />
           </Link>
         </Button>

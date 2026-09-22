@@ -22,8 +22,16 @@ test('a signed-in user can create a design from the intake form', async ({ page 
   await expect(page).toHaveURL(/\/designs\/[0-9a-f-]{36}$/);
   await expect(page.getByText('Media streaming').first()).toBeVisible();
   await expect(page.getByText('v1')).toBeVisible();
-  await expect(page.getByText('placeholder design')).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'API gateway' })).toBeVisible();
+  await expect(page.getByText('Placeholder design')).toBeVisible();
+
+  // The diagram renders the design's components, and clicking one explains it.
+  await expect(page.getByText('API gateway')).toBeVisible();
+  await page.getByText('API gateway').click();
+  const panel = page.getByRole('complementary', { name: 'Component details' });
+  await expect(panel.getByRole('heading', { name: 'API gateway' })).toBeVisible();
+  await expect(panel.getByText(/Keeps authentication and routing in one place/)).toBeVisible();
+  await expect(panel.getByText(/Ungrounded/)).toBeVisible();
+  await expect(panel.getByText('Clients call each service directly')).toBeVisible();
 
   // And it appears in the list, which is reloaded from the API.
   await page.getByRole('link', { name: 'My designs' }).click();
@@ -38,6 +46,24 @@ test('the intake form refuses to submit without features', async ({ page }) => {
 
   await expect(page.getByText('Add at least one feature.')).toBeVisible();
   await expect(page).toHaveURL(/\/designs\/new$/);
+});
+
+test('the app chrome stays put: only the content area scrolls', async ({ page }) => {
+  await signInAsNewUser(page);
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.goto('/designs/new');
+
+  // The document itself must not scroll: the top bar is fixed chrome and only
+  // the form scrolls. (A visually hidden radio escaping its label used to make
+  // the whole page scroll, showing empty background below the layout.)
+  const pageScrolls = await page.evaluate(
+    () => document.documentElement.scrollHeight > window.innerHeight + 1,
+  );
+  expect(pageScrolls).toBe(false);
+
+  // And the form really is scrollable to its end.
+  await page.getByRole('button', { name: 'Create design' }).scrollIntoViewIfNeeded();
+  await expect(page.getByRole('button', { name: 'Create design' })).toBeInViewport();
 });
 
 test("another user's design is not reachable by URL", async ({ page, browser }) => {
@@ -57,6 +83,6 @@ test("another user's design is not reachable by URL", async ({ page, browser }) 
   await otherPage.goto(designUrl);
 
   await expect(otherPage.getByRole('alert')).toContainText('Design not found');
-  await expect(otherPage.getByRole('heading', { name: 'API gateway' })).toBeHidden();
+  await expect(otherPage.getByText('API gateway')).toBeHidden();
   await otherContext.close();
 });

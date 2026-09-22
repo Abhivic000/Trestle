@@ -1,4 +1,5 @@
 import { Link, Outlet } from 'react-router';
+import { useAuth } from '@/auth/useAuth';
 import { Logo, LogoMark } from '@/components/brand/Logo';
 import { Button } from '@/components/ui/button';
 import { paths } from '@/lib/paths';
@@ -10,6 +11,8 @@ const sectionLinks = [
 ];
 
 export function MarketingLayout() {
+  const { session, loading } = useAuth();
+
   return (
     <div className="bg-blueprint min-h-dvh">
       <header className="sticky top-0 z-50 border-b border-subtle bg-background/85 backdrop-blur-md">
@@ -30,12 +33,24 @@ export function MarketingLayout() {
             ))}
           </ul>
           <div className="flex items-center gap-2 sm:gap-4">
-            <Button asChild variant="ghost" size="lg" className="text-muted-foreground">
-              <Link to={paths.login}>Sign in</Link>
-            </Button>
-            <Button asChild size="lg" className="font-semibold">
-              <Link to={paths.signup}>Start designing</Link>
-            </Button>
+            {/* While the stored session is still loading, reserve the space instead
+                of flashing "Sign in" at someone who is already signed in. */}
+            {loading ? (
+              <span aria-hidden="true" className="h-9 w-32" />
+            ) : session ? (
+              <Button asChild size="lg" className="font-semibold">
+                <Link to={paths.designs}>My designs</Link>
+              </Button>
+            ) : (
+              <>
+                <Button asChild variant="ghost" size="lg" className="text-muted-foreground">
+                  <Link to={paths.login}>Sign in</Link>
+                </Button>
+                <Button asChild size="lg" className="font-semibold">
+                  <Link to={paths.signup}>Start designing</Link>
+                </Button>
+              </>
+            )}
           </div>
         </nav>
       </header>

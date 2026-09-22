@@ -72,6 +72,17 @@ describe('requirement intake form', () => {
     });
   });
 
+  it('keeps a typed feature that was never explicitly added', async () => {
+    const user = renderPage();
+
+    // Typed but "Add" never clicked: submitting must not silently drop it.
+    await user.type(screen.getByLabelText('Core features'), 'offline downloads');
+    await user.click(screen.getByRole('button', { name: 'Create design' }));
+
+    expect(await screen.findByRole('heading', { name: 'Canvas page' })).toBeInTheDocument();
+    expect(mutateAsync.mock.calls[0]?.[0]).toMatchObject({ features: ['offline downloads'] });
+  });
+
   it('keeps a draft so a refresh does not lose the form', async () => {
     const user = renderPage();
 

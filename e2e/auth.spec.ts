@@ -63,6 +63,30 @@ test('a wrong password shows an error and stays on sign in', async ({ page }) =>
   await expect(page).toHaveURL(/\/login$/);
 });
 
+test('the landing page reflects whether you are signed in', async ({ page }) => {
+  // Signed out: the marketing calls to action.
+  await page.goto('/');
+  const nav = page.getByRole('navigation', { name: 'Main' });
+  await expect(nav.getByRole('link', { name: 'Sign in' })).toBeVisible();
+
+  const { email, password } = await createUser();
+  await nav.getByRole('link', { name: 'Sign in' }).click();
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Password').fill(password);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page).toHaveURL(/\/designs$/);
+
+  // The logo leads back to the public landing page, which now offers the app.
+  await page.getByRole('link', { name: 'Trestle home' }).click();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(nav.getByRole('link', { name: 'My designs' })).toBeVisible();
+  await expect(nav.getByRole('link', { name: 'Sign in' })).toBeHidden();
+  await expect(page.getByRole('link', { name: 'Open my designs' }).first()).toBeVisible();
+
+  await nav.getByRole('link', { name: 'My designs' }).click();
+  await expect(page).toHaveURL(/\/designs$/);
+});
+
 test('signed-in users skip the sign-in page', async ({ page }) => {
   const { email, password } = await createUser();
 

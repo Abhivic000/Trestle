@@ -132,6 +132,19 @@ describe('GET /projects/:id', () => {
     expect(fetched.currentVersion.design.summary).toBe(created.currentVersion.design.summary);
   });
 
+  it('answers 404 for an id that is not a uuid, rather than failing', async () => {
+    const res = await request(app).get('/projects/not-a-real-id').set(bearer(alice));
+    expect(res.status).toBe(404);
+    expect(apiErrorSchema.parse(res.body).error.code).toBe('not_found');
+  });
+
+  it('answers 404 for a well-formed id that does not exist', async () => {
+    const res = await request(app)
+      .get('/projects/00000000-0000-4000-8000-000000000000')
+      .set(bearer(alice));
+    expect(res.status).toBe(404);
+  });
+
   it("hides another user's design behind a 404", async () => {
     const aliceProject = await createProject(alice);
 

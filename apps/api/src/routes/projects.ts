@@ -8,6 +8,7 @@ import {
 } from '@trestle/shared';
 import { and, desc, eq } from 'drizzle-orm';
 import { Router } from 'express';
+import { z } from 'zod';
 import { currentUser } from '../auth/require-auth';
 import { db } from '../db/client';
 import { designVersions, projects } from '../db/schema';
@@ -112,7 +113,14 @@ projectsRouter.post('/', async (req, res) => {
 
 projectsRouter.get('/:projectId', async (req, res) => {
   const user = currentUser(req);
-  const { projectId } = req.params;
+
+  // Anything that isn't an id can't exist: answer 404 instead of letting Postgres
+  // reject the value and turning it into a 500.
+  const parsedId = z.uuid().safeParse(req.params.projectId);
+  if (!parsedId.success) {
+    throw new HttpError(404, 'not_found', 'Design not found.');
+  }
+  const projectId = parsedId.data;
 
   const [row] = await db
     .select({ project: projects, version: designVersions })

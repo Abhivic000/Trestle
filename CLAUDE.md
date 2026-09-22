@@ -84,7 +84,7 @@ Phase 5 (end-to-end auth tests) is done:
   `TEST_SUPABASE_SECRET_KEY`, `TEST_SUPABASE_PUBLISHABLE_KEY`).
 
 Phase 6 (main features) runs in steps: 6.1 design contract + intake ✅ ·
-6.2 canvas · 6.3 reference library + retrieval · 6.4 grounded generation ·
+6.2 canvas ✅ · 6.3 reference library + retrieval · 6.4 grounded generation ·
 6.5 edits + version history · 6.6 change requests (suggest-first diffs) ·
 6.7 industry comparison · 6.8 cost & traffic. Cross-cutting decisions:
 - Design JSON contract lives in `packages/shared/src/design.ts`
@@ -106,6 +106,30 @@ Phase 6 (main features) runs in steps: 6.1 design contract + intake ✅ ·
   Real generation replaces it in 6.4.
 - e2e note: choice chips are labels wrapping a visually hidden radio, so
   Playwright must click the visible label text, not `getByLabel`.
+- Step 6.2: React Flow (`@xyflow/react`) canvas lives in `apps/web/src/canvas/`
+  (`DesignCanvas`, `DesignNode`, `ComponentPanel`, `design-to-flow.ts`,
+  `component-kinds.ts`). The canvas is READ-ONLY for now (pan/zoom/select);
+  dragging + saving arrives in 6.5, so positions come straight from the design.
+  `designToFlow(design, statusOf)` already supports a per-id ChangeStatus
+  (unchanged/added/modified/removed) that renders dashed amber nodes and edges:
+  that is the diff-preview styling for 6.6. The React Flow attribution stays
+  visible (MIT licence terms). No auto-layout library yet; add a "Tidy layout"
+  button when users can add nodes.
+- Navigation rules: both logos (marketing + app chrome) go to the landing page;
+  the marketing nav and the landing CTAs switch to "My designs" / "Open my
+  designs" when a session exists, and render a placeholder while auth is still
+  loading so "Sign in" never flashes at a signed-in user.
+- NEVER call `supabase.auth.signOut()` from the API error path (e.g. on a 401).
+  supabase-js serialises auth calls with a lock: signing out while a sign-in is
+  in flight hangs that sign-in and then drops the fresh session (it broke every
+  auth e2e test). Let the client refresh tokens and let RequireAuth redirect.
+- `ClearCacheOnUserChange` in `RootLayout` wipes the TanStack Query cache when
+  the signed-in user changes, so one account never sees another's cached data.
+- Any label wrapping an `sr-only` (visually hidden, absolutely positioned) input
+  MUST also be `relative`. Without it the input anchors to the document instead
+  of the label, which grew the page past the `h-dvh` app shell and produced a
+  second scrollbar with empty background. An e2e test asserts the document does
+  not scroll on /designs/new.
 
 TypeScript is pinned to `~6.0.x` because typescript-eslint doesn't support
 TypeScript 7 yet; revisit when it does. `@types/node` tracks Node 24.

@@ -45,6 +45,11 @@ async function apiRequest<T>(
   });
   const responseBody: unknown = await response.json().catch(() => null);
 
+  // NOTE: do not call supabase.auth.signOut() on a 401 here. supabase-js
+  // serialises auth calls with a lock, so signing out while a sign-in is in
+  // flight hangs that sign-in and then drops the fresh session. The client
+  // refreshes tokens by itself, and RequireAuth redirects once there is no
+  // session; pages show the 401 message meanwhile.
   if (!response.ok) {
     const parsed = apiErrorSchema.safeParse(responseBody);
     throw parsed.success

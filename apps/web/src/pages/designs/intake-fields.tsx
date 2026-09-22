@@ -51,7 +51,10 @@ export function ChoiceGroup<T extends string>({
         return (
           <label
             key={option.value}
-            className={`cursor-pointer rounded-lg border px-3 py-2 text-sm transition-colors ${
+            // `relative` keeps the visually hidden (absolutely positioned) radio
+            // inside this label; otherwise it anchors to the document and makes
+            // the whole page scroll behind the layout.
+            className={`relative cursor-pointer rounded-lg border px-3 py-2 text-sm transition-colors ${
               selected
                 ? 'border-brand bg-brand-subtle text-foreground'
                 : 'bg-elevated text-muted-foreground hover:text-foreground'
@@ -112,6 +115,9 @@ export function TagListInput({
               add();
             }
           }}
+          // Typing an entry and clicking elsewhere (including Create) should not
+          // silently lose it.
+          onBlur={add}
           className="h-10"
         />
         <Button type="button" variant="outline" size="lg" className="h-10" onClick={add}>

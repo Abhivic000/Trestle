@@ -301,7 +301,8 @@ export function NewDesignPage() {
                     return (
                       <label
                         key={need}
-                        className={`cursor-pointer rounded-lg border px-3 py-2 text-sm transition-colors ${
+                        // `relative`: see the note in ChoiceGroup about sr-only inputs.
+                        className={`relative cursor-pointer rounded-lg border px-3 py-2 text-sm transition-colors ${
                           checked
                             ? 'border-brand bg-brand-subtle text-foreground'
                             : 'bg-elevated text-muted-foreground hover:text-foreground'
