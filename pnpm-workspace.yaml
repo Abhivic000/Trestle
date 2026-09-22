@@ -1,0 +1,9 @@
+packages:
+  - apps/*
+  - packages/*
+
+# pnpm 10 blocks dependency install scripts by default (a supply-chain safety
+# feature). esbuild (used by Vite, tsx and tsup) needs its script to set up
+# the right binary for this OS, so we allow it explicitly.
+onlyBuiltDependencies:
+  - esbuild

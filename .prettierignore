@@ -1,0 +1,8 @@
+node_modules
+dist
+coverage
+pnpm-lock.yaml
+
+# Hand-written planning docs: keep the author's formatting.
+docs
+CLAUDE.md

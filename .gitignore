@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+
+#Document files
+docs/
+
+# Build output
+dist/
+build/
+*.tsbuildinfo
+
+# Environment files: real secrets live here and must never be committed.
+# The committed templates are the .env.example files.
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Editor / OS
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Test coverage
+coverage/

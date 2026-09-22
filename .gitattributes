@@ -1,0 +1,3 @@
+# Store text files with LF line endings in git, even on Windows,
+# so diffs don't show every line changed when edited on different OSes.
+* text=auto eol=lf
