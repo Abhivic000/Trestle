@@ -64,4 +64,61 @@ export const comparisonEntries: CorpusEntry[] = [
       'Based on: Shopify engineering blog, "A Pods Architecture to Allow Shopify to Scale".',
     sourceUrl: 'https://shopify.engineering/a-pods-architecture-to-allow-shopify-to-scale',
   },
+  {
+    slug: 'comparison-notion-workspace-sharding',
+    kind: 'comparison',
+    patternType: 'sharding',
+    title: 'Notion: sharding Postgres by workspace',
+    summary:
+      "Notion partitioned Postgres by workspace id, because every block belongs to exactly one workspace and people work inside a single workspace at a time, so ordinary queries stay on one shard. They created 480 logical shards spread across 32 physical databases, choosing 480 because it divides neatly many ways, which lets them move to 40 or 48 hosts later without doubling the fleet. It is a good illustration that the shard key should come from the product's own structure, and that logical shards give room to grow without re-sharding.",
+    whenToUse:
+      'Multi-tenant products with a natural container (workspace, team, account) that nearly all queries already filter by.',
+    whenNotToUse:
+      'Products whose queries routinely cut across tenants, or which are nowhere near the limits of a single database.',
+    tradeoffs: [
+      'Cross-workspace features need a separate path or fan-out.',
+      'A single huge tenant can still overload one shard.',
+      'The migration itself is a large, carefully staged project.',
+    ],
+    sourceNote: 'Based on: Notion engineering blog, "Sharding Postgres at Notion".',
+    sourceUrl: 'https://www.notion.com/blog/sharding-postgres-at-notion',
+  },
+  {
+    slug: 'comparison-figma-vertical-then-horizontal',
+    kind: 'comparison',
+    patternType: 'sharding',
+    title: 'Figma: splitting by domain first, sharding second',
+    summary:
+      'Figma first scaled Postgres by vertical partitioning: moving groups of related tables (files, organisations and so on) into their own databases, which bought time without changing the data model. When that plateaued they moved to horizontal sharding on keys such as user id and file id, routing queries through a proxy that knows which physical shard holds the data and can gather results from several. They deliberately separated logical sharding in the application from physical sharding in the database, so the risky failover could be rehearsed before it was real.',
+    whenToUse:
+      'As a staged plan for a growing product: exhaust the simpler split by domain before committing to a shard key.',
+    whenNotToUse:
+      'Small systems, and teams without the capacity to build or adopt query routing, which is a substantial piece of infrastructure.',
+    tradeoffs: [
+      'Vertical partitioning removes cross-database joins and transactions between the split groups.',
+      'A routing proxy becomes critical infrastructure of its own.',
+      'The two-phase approach takes longer than sharding directly.',
+    ],
+    sourceNote:
+      'Based on: Figma engineering blog, "How Figma\'s Databases Team Lived to Tell the Scale".',
+    sourceUrl: 'https://www.figma.com/blog/how-figmas-databases-team-lived-to-tell-the-scale/',
+  },
+  {
+    slug: 'comparison-stripe-idempotency-keys',
+    kind: 'comparison',
+    patternType: 'consistency',
+    title: 'Stripe: idempotency keys on every write API',
+    summary:
+      'Stripe accepts a client-supplied idempotency key on POST requests and stores the status code and body of the first request made with that key, including failures. A retry with the same key returns the saved response instead of charging a customer twice, which makes network timeouts safe to retry. Keys can be pruned after about a day, and a reused key with different parameters is rejected, since that signals a client bug rather than a retry. It is the clearest public example of making an API safe to retry by design rather than by hope.',
+    whenToUse:
+      'Any API where a repeated request could take money, send a message or create a duplicate record.',
+    whenNotToUse: 'Read-only endpoints, which are already safe to repeat.',
+    tradeoffs: [
+      'The server must store keys and responses, and expire them.',
+      'Clients have to generate and reuse keys correctly.',
+      'Concurrent duplicates still need careful handling.',
+    ],
+    sourceNote: 'Based on: Stripe API documentation on idempotent requests.',
+    sourceUrl: 'https://docs.stripe.com/api/idempotent_requests',
+  },
 ];

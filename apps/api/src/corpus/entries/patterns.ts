@@ -16,7 +16,7 @@ export const patternEntries: CorpusEntry[] = [
     summary:
       'A cache sits between the application and the database. On a read the application asks the cache first; on a miss it reads the database and stores the result before returning it. This works because real traffic is rarely uniform: a small share of items usually accounts for most reads, so a cache holding only that share can absorb the majority of requests. Caches are measured by hit rate, and a few percentage points of hit rate can be the difference between one database and a fleet of them.',
     whenToUse:
-      'Read-heavy workloads where the same items are requested repeatedly, and where data can be a little stale without harm: product pages, profiles, popular feeds, configuration.',
+      'Read-heavy workloads where the same items are requested over and over and the database has become the bottleneck: popular products, profiles, trending songs or videos, busy feeds, configuration. Typical symptoms are database load dominated by repeated reads of a small set of rows, and latency that rises with traffic even though the data itself rarely changes.',
     whenNotToUse:
       'Write-heavy workloads, data that must be exactly current on every read, or access patterns with no repetition, where the cache adds latency and cost without improving hit rate.',
     tradeoffs: [

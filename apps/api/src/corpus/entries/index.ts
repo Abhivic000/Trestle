@@ -2,6 +2,7 @@ import { corpusEntrySchema, type CorpusEntry } from '@trestle/shared';
 import { z } from 'zod';
 import { comparisonEntries } from './comparisons';
 import { patternEntries } from './patterns';
+import { advancedPatternEntries } from './patterns-advanced';
 
 /**
  * Every reference-library entry, validated at load time so a malformed entry is
@@ -18,4 +19,4 @@ export const corpusSeedEntries: CorpusEntry[] = z
       slugs.add(entry.slug);
     }
   })
-  .parse([...patternEntries, ...comparisonEntries]);
+  .parse([...patternEntries, ...advancedPatternEntries, ...comparisonEntries]);

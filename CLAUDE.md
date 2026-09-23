@@ -134,9 +134,12 @@ Phase 6 (main features) runs in steps: 6.1 design contract + intake ✅ ·
   does cosine similarity with an optional `patternType` filter and a minimum
   similarity. Tests use `createFakeEmbedder` (deterministic, no network, no
   quota), so they verify plumbing/filtering/ordering, NOT real semantics: check
-  semantic quality by hand against the live API (last run: 7/8 paraphrased
-  queries ranked the right entry first; the miss was still in the top 4 and
-  scores bunch together while the library is small).
+  semantic quality by hand against the live API. Library size: 30 entries
+  (24 patterns, 6 comparisons). Last hand-check over 12 paraphrased queries:
+  10 ranked the right entry first, the other two were near-ties between two
+  genuinely relevant entries. Entries retrieve better when they describe the
+  SYMPTOM as well as the mechanism (adding symptom wording to
+  `caching-read-through` moved it from outside the top 3 to rank 1).
 - Any label wrapping an `sr-only` (visually hidden, absolutely positioned) input
   MUST also be `relative`. Without it the input anchors to the document instead
   of the label, which grew the page past the `h-dvh` app shell and produced a
@@ -213,6 +216,12 @@ from it without asking. Remove an item once it ships.
     form enforces 8, the server default is 6.
 15. Supabase region is Tokyo (~280ms/query for the owner); moving means a new
     project. Decided to keep for now.
+16. Reference library: grow past 30 entries (thin on auth, observability,
+    consistency; no entries yet for realtime/websockets or ML-ish workloads).
+17. Retrieval: add keyword+vector hybrid search if topic-filtered similarity
+    proves too blunt once generation is using it (step 6.4 will show).
+18. Show library sources in the UI (the Compare tab and the rationale panel's
+    "grounded" state) once generation cites them.
 
 ## Screens required (per PRD user flows)
 
