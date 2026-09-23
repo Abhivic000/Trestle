@@ -7,6 +7,7 @@ import {
   timestamp,
   unique,
   uuid,
+  vector,
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { authUsers } from 'drizzle-orm/supabase';
@@ -66,5 +67,41 @@ export const designVersions = pgTable(
   // Version numbers are unique within a project (v1, v2, ...). Versions are never updated.
   (table) => [
     unique('design_versions_project_version_uq').on(table.projectId, table.versionNumber),
+  ],
+).enableRLS();
+
+/**
+ * The reference library that grounds generated rationale. Rows are loaded from
+ * the seed files by `pnpm --filter @trestle/api corpus:ingest`; nothing here is
+ * user data, and no user writes to it.
+ */
+export const EMBEDDING_DIMENSIONS = 768;
+
+export const corpusEntries = pgTable(
+  'corpus_entries',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    /** Stable id from the seed file; entries are updated in place by slug. */
+    slug: text('slug').notNull().unique(),
+    kind: text('kind').notNull(),
+    patternType: text('pattern_type').notNull(),
+    title: text('title').notNull(),
+    summary: text('summary').notNull(),
+    whenToUse: text('when_to_use').notNull(),
+    whenNotToUse: text('when_not_to_use').notNull(),
+    tradeoffs: jsonb('tradeoffs').notNull(),
+    sourceNote: text('source_note').notNull(),
+    sourceUrl: text('source_url'),
+    /** The meaning of the entry as numbers; used for similarity search. */
+    embedding: vector('embedding', { dimensions: EMBEDDING_DIMENSIONS }),
+    /** Hash of the embedded text: lets ingest skip unchanged entries. */
+    contentHash: text('content_hash').notNull(),
+    embeddingModel: text('embedding_model'),
+    ...timestamps,
+  },
+  (table) => [
+    index('corpus_entries_pattern_type_idx').on(table.patternType),
+    // HNSW index for fast "closest meaning" lookups using cosine distance.
+    index('corpus_entries_embedding_idx').using('hnsw', table.embedding.op('vector_cosine_ops')),
   ],
 ).enableRLS();

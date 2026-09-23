@@ -7,6 +7,7 @@ import { requireAuth } from './auth/require-auth';
 import { env } from './config/env';
 import { logger } from './logger';
 import { errorHandler, notFoundHandler } from './middleware/error-handler';
+import { corpusRouter } from './routes/corpus';
 import { healthRouter } from './routes/health';
 import { meRouter } from './routes/me';
 import { projectsRouter } from './routes/projects';
@@ -63,6 +64,7 @@ export function createApp() {
   // Everything below requires a signed-in user.
   app.use('/me', requireAuth, meRouter);
   app.use('/projects', requireAuth, projectsRouter);
+  app.use('/corpus', requireAuth, corpusRouter);
 
   app.use(notFoundHandler); // no route matched
   app.use(errorHandler); // must be last

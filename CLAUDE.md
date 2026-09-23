@@ -84,7 +84,7 @@ Phase 5 (end-to-end auth tests) is done:
   `TEST_SUPABASE_SECRET_KEY`, `TEST_SUPABASE_PUBLISHABLE_KEY`).
 
 Phase 6 (main features) runs in steps: 6.1 design contract + intake ✅ ·
-6.2 canvas ✅ · 6.3 reference library + retrieval · 6.4 grounded generation ·
+6.2 canvas ✅ · 6.3 reference library + retrieval ✅ (pipeline; entries growing) · 6.4 grounded generation ·
 6.5 edits + version history · 6.6 change requests (suggest-first diffs) ·
 6.7 industry comparison · 6.8 cost & traffic. Cross-cutting decisions:
 - Design JSON contract lives in `packages/shared/src/design.ts`
@@ -125,6 +125,18 @@ Phase 6 (main features) runs in steps: 6.1 design contract + intake ✅ ·
   auth e2e test). Let the client refresh tokens and let RequireAuth redirect.
 - `ClearCacheOnUserChange` in `RootLayout` wipes the TanStack Query cache when
   the signed-in user changes, so one account never sees another's cached data.
+- Step 6.3: reference library. Entries are hand-written TS data files in
+  `apps/api/src/corpus/entries/` (validated by `corpusEntrySchema` at load).
+  `corpus:ingest` (and `corpus:ingest:test`) embeds changed entries only, keyed
+  by a content hash, and prunes rows whose entry was deleted. Embeddings:
+  Gemini `gemini-embedding-001` at 768 dimensions, stored in `corpus_entries`
+  with an HNSW cosine index; the model name is stored per row. `searchCorpus`
+  does cosine similarity with an optional `patternType` filter and a minimum
+  similarity. Tests use `createFakeEmbedder` (deterministic, no network, no
+  quota), so they verify plumbing/filtering/ordering, NOT real semantics: check
+  semantic quality by hand against the live API (last run: 7/8 paraphrased
+  queries ranked the right entry first; the miss was still in the top 4 and
+  scores bunch together while the library is small).
 - Any label wrapping an `sr-only` (visually hidden, absolutely positioned) input
   MUST also be `relative`. Without it the input anchors to the document instead
   of the label, which grew the page past the `h-dvh` app shell and produced a
@@ -177,6 +189,30 @@ TypeScript 7 yet; revisit when it does. `@types/node` tracks Node 24.
   it's a good point to commit (with a suggested message). A `.gitignore` must
   exist before the first commit.
 - Machine: Windows 11, Node 24, pnpm 10, Git, VS Code (all already installed).
+
+## Backlog (noticed, NOT built: confirm with the owner before building any of these)
+
+Add to this list whenever something worth doing is noticed mid-task; never build
+from it without asking. Remove an item once it ships.
+
+1. Canvas: the design-summary overlay can cover nodes; make it collapsible.
+2. Canvas: keyboard navigation between nodes (React Flow supports it).
+3. Canvas: minimap for large designs.
+4. Rename a project (the name is currently derived from the project type).
+5. Delete a project (and its versions).
+6. My designs: search/sort once a user has many designs.
+7. Limit the number of projects per account (pairs with the AI rate limit in 6.4).
+8. Password reset flow (blocked: needs a real email provider, see Phase 4 notes).
+9. "Continue with Google" sign-in (Phase 4 decision 1, option B).
+10. Toast notifications for transient errors (today everything is inline).
+11. Landing page: replace the generic grounding claims with real numbers once the
+    reference library exists.
+12. Remove `apps/web/src/test/jest-dom-vitest.d.ts` when jest-dom types Vitest 5.
+13. Move to TypeScript 7 when typescript-eslint supports it.
+14. Supabase minimum password length: the owner could not find the setting; the
+    form enforces 8, the server default is 6.
+15. Supabase region is Tokyo (~280ms/query for the owner); moving means a new
+    project. Decided to keep for now.
 
 ## Screens required (per PRD user flows)
 

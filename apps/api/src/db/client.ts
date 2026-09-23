@@ -8,3 +8,6 @@ import * as schema from './schema';
 export const sql = postgres(env.DATABASE_URL, { max: 10 });
 
 export const db = drizzle(sql, { schema });
+
+/** The database handle type, so helpers can accept `db` (or a transaction). */
+export type Database = typeof db;

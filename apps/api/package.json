@@ -13,7 +13,9 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:migrate:test": "drizzle-kit migrate --config drizzle.test.config.ts",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "corpus:ingest": "tsx --env-file=.env src/corpus/ingest-cli.ts",
+    "corpus:ingest:test": "tsx --env-file=.env.test src/corpus/ingest-cli.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.116.0",
