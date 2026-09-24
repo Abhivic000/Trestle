@@ -85,7 +85,7 @@ Phase 5 (end-to-end auth tests) is done:
 
 Phase 6 (main features) runs in steps: 6.1 design contract + intake ✅ ·
 6.2 canvas ✅ · 6.3 reference library + retrieval ✅ · 6.4 grounded generation ✅ · 6.4 grounded generation ·
-6.5 edits + version history · 6.6 change requests (suggest-first diffs) ·
+6.5 edits + version history ✅ · 6.6 change requests (suggest-first diffs) ·
 6.7 industry comparison · 6.8 cost & traffic. Cross-cutting decisions:
 - Design JSON contract lives in `packages/shared/src/design.ts`
   (`schemaVersion` 1, components/connections/dataModel, `sources[]` per
@@ -189,6 +189,22 @@ Phase 6 (main features) runs in steps: 6.1 design contract + intake ✅ ·
 - Models paste citation slugs into prose ("...[auth-use-managed-identity-provider]").
   `stripInlineCitations` removes them before storage, and the prompt forbids it.
   Sources belong only in `sources[]`.
+- Step 6.5: editing + versions. The canvas becomes editable by passing
+  `onChange` to `DesignCanvas`; every edit helper is a pure function in
+  `canvas/design-edits.ts` returning a NEW design (unit tested). Edits live in a
+  local draft TAGGED WITH THE VERSION they were based on, so a save or restore
+  retires the draft without an effect. `POST /projects/:id/edits` validates with
+  `designSchema`, diffs against the current version for an automatic summary
+  (`summariseDesignChange` in shared) and writes a new row; versions are never
+  updated in place. `saveNewVersion` locks the project row (`SELECT ... FOR
+  UPDATE`) so concurrent saves can't reuse a version number. Restoring writes
+  the old design as a NEW version ("Restored version 1"); history is immutable.
+- Adding a component by hand sets an honest rationale ("Added manually...") and
+  no sources: never invent reasoning the AI did not produce.
+- Deleting a component must also drop its connections and data-model entries, or
+  the design fails `designSchema`'s referential checks on save.
+- NEVER write files containing non-ASCII (…, ·) with PowerShell `Set-Content`:
+  it mangles them into mojibake. Use the Write/Edit tools or a node script.
 - Any label wrapping an `sr-only` (visually hidden, absolutely positioned) input
   MUST also be `relative`. Without it the input anchors to the document instead
   of the label, which grew the page past the `h-dvh` app shell and produced a

@@ -3,7 +3,10 @@ import {
   designSchema,
   projectNameFromRequirements,
   requirementsSchema,
+  saveEditsRequestSchema,
+  type Design,
   type ListProjectsResponse,
+  type ListVersionsResponse,
   type ProjectDetail,
 } from '@trestle/shared';
 import { and, desc, eq } from 'drizzle-orm';
@@ -12,14 +15,35 @@ import { z } from 'zod';
 import { GenerationError } from '../ai/design-generator';
 import { assertWithinDailyAiLimit, recordAiRequest } from '../ai/usage';
 import { currentUser } from '../auth/require-auth';
-import { db } from '../db/client';
+import { db, type Database } from '../db/client';
 import { designVersions, projects } from '../db/schema';
 import { generateDesign } from '../designs/generate-design';
+import { describeManualEdit, loadVersion, saveNewVersion } from '../designs/versions';
 import type { AppDependencies } from '../deps';
 import { HttpError } from '../errors';
 
 /** Generation is slow but not unbounded; give up rather than hang the browser. */
 const GENERATION_TIMEOUT_MS = 90_000;
+
+/** Anything that isn't an id can't exist: 404 rather than a database error. */
+function parseProjectId(value: string | undefined, message = 'Design not found.'): string {
+  const parsed = z.uuid().safeParse(value);
+  if (!parsed.success) throw new HttpError(404, 'not_found', message);
+  return parsed.data;
+}
+
+/** The design currently pointed at by the project, for diffing a save against. */
+async function loadCurrentDesign(db: Database, projectId: string, userId: string): Promise<Design> {
+  const [row] = await db
+    .select({ designJson: designVersions.designJson })
+    .from(projects)
+    .innerJoin(designVersions, eq(designVersions.id, projects.currentVersionId))
+    .where(and(eq(projects.id, projectId), eq(projects.userId, userId)))
+    .limit(1);
+
+  if (!row) throw new HttpError(404, 'not_found', 'Design not found.');
+  return designSchema.parse(row.designJson);
+}
 
 export function createProjectsRouter({ embedder, designGenerator }: AppDependencies) {
   const router = Router();
@@ -144,16 +168,99 @@ export function createProjectsRouter({ embedder, designGenerator }: AppDependenc
     res.status(201).json(body);
   });
 
+  /** Save manual canvas edits as a new, immutable version. */
+  router.post('/:projectId/edits', async (req, res) => {
+    const user = currentUser(req);
+    const projectId = parseProjectId(req.params.projectId);
+
+    const parsed = saveEditsRequestSchema.safeParse(req.body);
+    if (!parsed.success) {
+      const [issue] = parsed.error.issues;
+      throw new HttpError(
+        400,
+        'validation_error',
+        issue ? `${issue.path.join('.')}: ${issue.message}` : 'Invalid design.',
+      );
+    }
+
+    const current = await loadCurrentDesign(db, projectId, user.id);
+    const summary = describeManualEdit(current, parsed.data.design);
+
+    const project = await saveNewVersion(db, {
+      projectId,
+      userId: user.id,
+      design: parsed.data.design,
+      changeSummary: summary,
+    });
+    res.status(201).json(project);
+  });
+
+  /** The version history drawer. */
+  router.get('/:projectId/versions', async (req, res) => {
+    const user = currentUser(req);
+    const projectId = parseProjectId(req.params.projectId);
+
+    const rows = await db
+      .select({
+        id: designVersions.id,
+        versionNumber: designVersions.versionNumber,
+        changeSummary: designVersions.changeSummary,
+        createdAt: designVersions.createdAt,
+        generatorModel: designVersions.generatorModel,
+        currentVersionId: projects.currentVersionId,
+      })
+      .from(designVersions)
+      .innerJoin(projects, eq(projects.id, designVersions.projectId))
+      .where(and(eq(designVersions.projectId, projectId), eq(projects.userId, user.id)))
+      .orderBy(desc(designVersions.versionNumber));
+
+    if (rows.length === 0) {
+      throw new HttpError(404, 'not_found', 'Design not found.');
+    }
+
+    const body: ListVersionsResponse = {
+      versions: rows.map((row) => ({
+        id: row.id,
+        versionNumber: row.versionNumber,
+        changeSummary: row.changeSummary,
+        createdAt: row.createdAt.toISOString(),
+        generatorModel: row.generatorModel,
+        isCurrent: row.currentVersionId === row.id,
+      })),
+    };
+    res.json(body);
+  });
+
+  /** Open an older version (read-only preview in the canvas). */
+  router.get('/:projectId/versions/:versionId', async (req, res) => {
+    const user = currentUser(req);
+    const projectId = parseProjectId(req.params.projectId);
+    const versionId = parseProjectId(req.params.versionId, 'Version not found.');
+
+    const { design, versionNumber } = await loadVersion(db, projectId, user.id, versionId);
+    res.json({ id: versionId, versionNumber, design });
+  });
+
+  /** Bring an old version back as a NEW version: history is never rewritten. */
+  router.post('/:projectId/versions/:versionId/restore', async (req, res) => {
+    const user = currentUser(req);
+    const projectId = parseProjectId(req.params.projectId);
+    const versionId = parseProjectId(req.params.versionId, 'Version not found.');
+
+    const { design, versionNumber } = await loadVersion(db, projectId, user.id, versionId);
+    const project = await saveNewVersion(db, {
+      projectId,
+      userId: user.id,
+      design,
+      changeSummary: `Restored version ${String(versionNumber)}`,
+    });
+    res.status(201).json(project);
+  });
+
   router.get('/:projectId', async (req, res) => {
     const user = currentUser(req);
 
-    // Anything that isn't an id can't exist: answer 404 instead of letting Postgres
-    // reject the value and turning it into a 500.
-    const parsedId = z.uuid().safeParse(req.params.projectId);
-    if (!parsedId.success) {
-      throw new HttpError(404, 'not_found', 'Design not found.');
-    }
-    const projectId = parsedId.data;
+    const projectId = parseProjectId(req.params.projectId);
 
     const [row] = await db
       .select({ project: projects, version: designVersions })

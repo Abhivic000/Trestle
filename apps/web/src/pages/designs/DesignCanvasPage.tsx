@@ -1,26 +1,73 @@
-import { useState } from 'react';
-import { History, Info, LayoutGrid, LoaderCircle, Monitor } from 'lucide-react';
+﻿import { useEffect, useState } from 'react';
+import type { Design } from '@trestle/shared';
+import { History, Info, LayoutGrid, LoaderCircle, Monitor, Plus, Undo2 } from 'lucide-react';
 import { Link, useParams } from 'react-router';
 import { ComponentPanel } from '@/canvas/ComponentPanel';
 import { DesignCanvas } from '@/canvas/DesignCanvas';
+import { addComponent, updateComponent, type NewComponentInput } from '@/canvas/design-edits';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { paths } from '@/lib/paths';
-import { useProject } from '@/lib/queries';
+import { useProject, useSaveEdits } from '@/lib/queries';
+import { AddComponentDialog } from './AddComponentDialog';
+import { VersionHistoryDrawer } from './VersionHistoryDrawer';
 
 /**
- * The design canvas screen: diagram on the left, details on the right, add-on
- * prompt along the bottom. Editing (6.5) and change requests (6.6) come later.
+ * The design canvas screen: diagram, details panel, editing toolbar and the
+ * add-on prompt (wired up in step 6.6).
+ *
+ * Edits are kept locally until Save, which writes a new immutable version.
  */
 export function DesignCanvasPage() {
   const { designId } = useParams();
   const { data: project, isPending, error } = useProject(designId);
+  const saveEdits = useSaveEdits(designId);
+
   const [selectedComponentId, setSelectedComponentId] = useState<string | null>(null);
   const [tidyLayout, setTidyLayout] = useState(false);
+  // The draft carries the version it was based on, so a save or a restore
+  // (which changes the current version) automatically retires it. No effect needed.
+  const [draft, setDraft] = useState<{ versionId: string; design: Design } | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
 
-  const design = project?.currentVersion.design;
+  const currentVersionId = project?.currentVersion.id;
+  const saved = project?.currentVersion.design ?? null;
+  const liveDraft = draft && draft.versionId === currentVersionId ? draft : null;
+  const design = liveDraft?.design ?? saved;
+  const hasUnsavedChanges = liveDraft !== null;
+
+  function editDesign(next: Design) {
+    if (!currentVersionId) return;
+    setDraft({ versionId: currentVersionId, design: next });
+  }
+
+  // Leaving with unsaved edits should not be silent.
+  useEffect(() => {
+    if (!hasUnsavedChanges) return;
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+    };
+    window.addEventListener('beforeunload', warn);
+    return () => {
+      window.removeEventListener('beforeunload', warn);
+    };
+  }, [hasUnsavedChanges]);
+
   const selectedComponent =
     design?.components.find((component) => component.id === selectedComponentId) ?? null;
+
+  function handleAdd(input: NewComponentInput) {
+    if (!design) return;
+    const next = addComponent(design, input);
+    editDesign(next);
+    setSelectedComponentId(next.components.at(-1)?.id ?? null);
+  }
+
+  function handleRename(componentId: string, changes: { label?: string; technology?: string }) {
+    if (!design) return;
+    editDesign(updateComponent(design, componentId, changes));
+  }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -39,37 +86,87 @@ export function DesignCanvasPage() {
               v{project.currentVersion.versionNumber}
             </span>
           )}
-          {design?.origin === 'placeholder' && (
-            <span className="hidden items-center gap-1 rounded-full border border-warning/30 bg-warning/10 px-2 py-0.5 text-[10px] text-warning sm:inline-flex">
+          {hasUnsavedChanges && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-warning/30 bg-warning/10 px-2 py-0.5 text-[10px] text-warning">
               <Info className="size-3" aria-hidden="true" />
-              Placeholder design
+              Unsaved changes
             </span>
           )}
         </div>
+
         <div className="flex shrink-0 items-center gap-1">
           {design && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                setTidyLayout((value) => !value);
-              }}
-              aria-pressed={tidyLayout}
-              title="Re-space the diagram using the standard layout (not saved yet)"
-            >
-              <LayoutGrid data-icon="inline-start" />
-              {tidyLayout ? 'Original layout' : 'Tidy layout'}
-            </Button>
+            <>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setAddOpen(true);
+                }}
+              >
+                <Plus data-icon="inline-start" />
+                Add
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setTidyLayout((value) => !value);
+                }}
+                aria-pressed={tidyLayout}
+                title="Re-space the diagram using the standard layout"
+              >
+                <LayoutGrid data-icon="inline-start" />
+                {tidyLayout ? 'Original layout' : 'Tidy layout'}
+              </Button>
+            </>
           )}
-          <Button variant="ghost" size="sm" disabled title="Coming soon">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setHistoryOpen(true);
+            }}
+            disabled={!project}
+          >
             <History data-icon="inline-start" />
             Version history
           </Button>
+
+          {hasUnsavedChanges && (
+            <>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setDraft(null);
+                }}
+                disabled={saveEdits.isPending}
+              >
+                <Undo2 data-icon="inline-start" />
+                Discard
+              </Button>
+              <Button
+                size="sm"
+                className="font-semibold"
+                disabled={saveEdits.isPending}
+                onClick={() => {
+                  if (liveDraft) void saveEdits.mutateAsync(liveDraft.design);
+                }}
+              >
+                {saveEdits.isPending ? 'Saving…' : 'Save version'}
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
-      {/* Below lg the panel stacks under the canvas, so selecting a box still
-          shows its details instead of appearing to do nothing. */}
+      {saveEdits.isError && (
+        <p role="alert" className="bg-danger/10 px-4 py-2 text-xs text-danger sm:px-6">
+          Could not save: {saveEdits.error.message}
+        </p>
+      )}
+
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
         <section aria-label="Design canvas" className="relative min-h-75 min-w-0 flex-1 lg:min-h-0">
           {isPending && (
@@ -97,9 +194,13 @@ export function DesignCanvasPage() {
                 selectedComponentId={selectedComponentId}
                 onSelectComponent={setSelectedComponentId}
                 tidyLayout={tidyLayout}
+                onChange={editDesign}
               />
               <p className="pointer-events-none absolute top-3 left-3 z-10 max-w-md rounded-lg border bg-background/85 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground backdrop-blur-sm">
                 {design.summary}
+              </p>
+              <p className="pointer-events-none absolute right-3 bottom-3 z-10 rounded-md border bg-background/85 px-2 py-1 font-mono text-[10px] text-tertiary backdrop-blur-sm">
+                drag to move · drag a dot to connect · Delete to remove
               </p>
             </>
           )}
@@ -109,13 +210,16 @@ export function DesignCanvasPage() {
           aria-label="Component details"
           className="flex max-h-90 shrink-0 flex-col overflow-hidden border-t border-subtle bg-surface lg:max-h-none lg:w-85 lg:border-t-0 lg:border-l"
         >
-          <ComponentPanel component={selectedComponent} />
+          <ComponentPanel
+            component={selectedComponent}
+            onRename={selectedComponent ? handleRename : undefined}
+          />
         </aside>
       </div>
 
       <div className="flex shrink-0 items-center gap-2.5 border-t border-subtle px-4 py-3.5 sm:px-6">
         <span className="hidden shrink-0 rounded-full bg-brand-subtle px-2.5 py-1 text-[11px] font-medium whitespace-nowrap text-brand-soft sm:inline">
-          ✦ Add-on
+          âœ¦ Add-on
         </span>
         <Input
           aria-label="Describe a change"
@@ -128,6 +232,16 @@ export function DesignCanvasPage() {
           Suggest
         </Button>
       </div>
+
+      <AddComponentDialog open={addOpen} onOpenChange={setAddOpen} onAdd={handleAdd} />
+      {designId && (
+        <VersionHistoryDrawer
+          projectId={designId}
+          open={historyOpen}
+          onOpenChange={setHistoryOpen}
+          hasUnsavedChanges={hasUnsavedChanges}
+        />
+      )}
     </div>
   );
 }

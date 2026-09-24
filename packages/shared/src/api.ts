@@ -60,3 +60,29 @@ export const projectDetailSchema = projectSummarySchema.extend({
 });
 
 export type ProjectDetail = z.infer<typeof projectDetailSchema>;
+
+/** `POST /projects/:id/edits`: save manual canvas edits as a new version. */
+export const saveEditsRequestSchema = z.object({
+  design: designSchema,
+});
+
+export type SaveEditsRequest = z.infer<typeof saveEditsRequestSchema>;
+
+/** A row in the version history drawer (without the full design). */
+export const designVersionSummarySchema = z.object({
+  id: z.uuid(),
+  versionNumber: z.number().int().positive(),
+  changeSummary: z.string().nullable(),
+  createdAt: z.iso.datetime({ offset: true }),
+  /** Which AI model produced it, or null for a manual edit. */
+  generatorModel: z.string().nullable(),
+  isCurrent: z.boolean(),
+});
+
+export type DesignVersionSummary = z.infer<typeof designVersionSummarySchema>;
+
+export const listVersionsResponseSchema = z.object({
+  versions: z.array(designVersionSummarySchema),
+});
+
+export type ListVersionsResponse = z.infer<typeof listVersionsResponseSchema>;

@@ -4,6 +4,7 @@ import {
   corpusEntrySchema,
   healthResponseSchema,
   listProjectsResponseSchema,
+  listVersionsResponseSchema,
   meResponseSchema,
   projectDetailSchema,
   type Requirements,
@@ -263,6 +264,135 @@ describe('GET /projects', () => {
     expect(aliceIds).not.toContain(bobProject.id);
     expect(bobIds).toContain(bobProject.id);
     expect(bobIds).not.toContain(aliceProject.id);
+  });
+});
+
+describe('saving edits and version history', () => {
+  it('saves an edit as a new version with an automatic summary', async () => {
+    const project = await createProject(alice);
+    const design = project.currentVersion.design;
+
+    // Move the first component and rename it.
+    const [first, ...rest] = design.components;
+    if (!first) throw new Error('expected a component');
+    const edited = {
+      ...design,
+      components: [
+        { ...first, label: 'Renamed service', position: { x: first.position.x + 120, y: 40 } },
+        ...rest,
+      ],
+    };
+
+    const res = await request(app)
+      .post(`/projects/${project.id}/edits`)
+      .set(bearer(alice))
+      .send({ design: edited });
+
+    expect(res.status).toBe(201);
+    const saved = projectDetailSchema.parse(res.body);
+    expect(saved.currentVersion.versionNumber).toBe(2);
+    expect(saved.currentVersion.changeSummary).toContain('Edited 1 component');
+    expect(saved.currentVersion.design.components[0]?.label).toBe('Renamed service');
+  });
+
+  it('rejects an invalid design without creating a version', async () => {
+    const project = await createProject(alice);
+    const broken = {
+      ...project.currentVersion.design,
+      connections: [{ id: 'ghost__ghost', from: 'ghost', to: 'ghost', kind: 'sync' }],
+    };
+
+    const res = await request(app)
+      .post(`/projects/${project.id}/edits`)
+      .set(bearer(alice))
+      .send({ design: broken });
+
+    expect(res.status).toBe(400);
+    expect(apiErrorSchema.parse(res.body).error.code).toBe('validation_error');
+
+    const after = await request(app)
+      .get(`/projects/${project.id}/versions`)
+      .set(bearer(alice))
+      .expect(200);
+    expect(listVersionsResponseSchema.parse(after.body).versions).toHaveLength(1);
+  });
+
+  it('lists versions newest first and marks the current one', async () => {
+    const project = await createProject(alice);
+    await request(app)
+      .post(`/projects/${project.id}/edits`)
+      .set(bearer(alice))
+      .send({ design: project.currentVersion.design })
+      .expect(201);
+
+    const res = await request(app).get(`/projects/${project.id}/versions`).set(bearer(alice));
+    const { versions } = listVersionsResponseSchema.parse(res.body);
+
+    expect(versions.map((version) => version.versionNumber)).toEqual([2, 1]);
+    expect(versions[0]?.isCurrent).toBe(true);
+    expect(versions[1]?.isCurrent).toBe(false);
+    // Version 1 came from the model; version 2 was a manual save.
+    expect(versions[1]?.generatorModel).toBe('fake-model-v1');
+    expect(versions[0]?.generatorModel).toBeNull();
+  });
+
+  it('restores an old version as a new version, keeping history intact', async () => {
+    const project = await createProject(alice);
+    const original = project.currentVersion.design;
+    const v1Id = project.currentVersion.id;
+
+    // Drop the last components, and everything that referenced them: the design
+    // contract rejects dangling connections or data entities.
+    const kept = original.components.slice(0, 3);
+    const keptIds = new Set(kept.map((component) => component.id));
+    const trimmed = {
+      ...original,
+      components: kept,
+      connections: original.connections.filter(
+        (connection) => keptIds.has(connection.from) && keptIds.has(connection.to),
+      ),
+      dataModel: original.dataModel.filter((entity) => keptIds.has(entity.storedIn)),
+    };
+
+    await request(app)
+      .post(`/projects/${project.id}/edits`)
+      .set(bearer(alice))
+      .send({ design: trimmed })
+      .expect(201);
+
+    const res = await request(app)
+      .post(`/projects/${project.id}/versions/${v1Id}/restore`)
+      .set(bearer(alice));
+
+    expect(res.status).toBe(201);
+    const restored = projectDetailSchema.parse(res.body);
+    expect(restored.currentVersion.versionNumber).toBe(3);
+    expect(restored.currentVersion.changeSummary).toBe('Restored version 1');
+    expect(restored.currentVersion.design.components).toHaveLength(original.components.length);
+
+    // Nothing was rewritten: all three versions still exist.
+    const history = await request(app)
+      .get(`/projects/${project.id}/versions`)
+      .set(bearer(alice))
+      .expect(200);
+    expect(listVersionsResponseSchema.parse(history.body).versions).toHaveLength(3);
+  });
+
+  it("refuses to touch another user's design", async () => {
+    const project = await createProject(alice);
+
+    await request(app)
+      .post(`/projects/${project.id}/edits`)
+      .set(bearer(bob))
+      .send({ design: project.currentVersion.design })
+      .expect(404);
+
+    await request(app).get(`/projects/${project.id}/versions`).set(bearer(bob)).expect(404);
+
+    await request(app)
+      .post(`/projects/${project.id}/versions/${project.currentVersion.id}/restore`)
+      .set(bearer(bob))
+      .expect(404);
   });
 });
 

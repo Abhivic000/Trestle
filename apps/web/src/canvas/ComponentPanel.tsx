@@ -1,15 +1,18 @@
 import type { DesignComponent } from '@trestle/shared';
 import { ShieldAlert } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { componentKindStyles } from './component-kinds';
 import { TechnologyBadge } from './TechnologyBadge';
 
 interface ComponentPanelProps {
   component: DesignComponent | null;
+  /** When set, the name and technology become editable. */
+  onRename?: (componentId: string, changes: { label?: string; technology?: string }) => void;
 }
 
 /** Side panel: why a component is there, with Compare and Cost to follow. */
-export function ComponentPanel({ component }: ComponentPanelProps) {
+export function ComponentPanel({ component, onRename }: ComponentPanelProps) {
   if (!component) {
     return (
       <div className="flex h-full flex-col">
@@ -41,9 +44,33 @@ export function ComponentPanel({ component }: ComponentPanelProps) {
             <Icon className="size-3.5" aria-hidden="true" />
             {kindLabel}
           </div>
-          <h2 className="mt-1 text-[15px] font-semibold">{component.label}</h2>
-          {component.technology && (
-            <TechnologyBadge technology={component.technology} className="mt-1.5 py-1" />
+          {onRename ? (
+            <div className="mt-1 flex flex-col gap-2">
+              <Input
+                aria-label="Component name"
+                value={component.label}
+                onChange={(event) => {
+                  onRename(component.id, { label: event.target.value });
+                }}
+                className="h-8 text-[15px] font-semibold"
+              />
+              <Input
+                aria-label="Technology"
+                value={component.technology ?? ''}
+                placeholder="Technology (optional)"
+                onChange={(event) => {
+                  onRename(component.id, { technology: event.target.value });
+                }}
+                className="h-8 font-mono text-xs"
+              />
+            </div>
+          ) : (
+            <>
+              <h2 className="mt-1 text-[15px] font-semibold">{component.label}</h2>
+              {component.technology && (
+                <TechnologyBadge technology={component.technology} className="mt-1.5 py-1" />
+              )}
+            </>
           )}
           <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
             {component.responsibility}

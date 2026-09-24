@@ -1,7 +1,9 @@
 import {
   createProjectRequestSchema,
   listProjectsResponseSchema,
+  listVersionsResponseSchema,
   projectDetailSchema,
+  type Design,
   type ProjectDetail,
   type Requirements,
 } from '@trestle/shared';
@@ -16,6 +18,7 @@ import { apiGet, apiPost, ApiError } from './api';
 export const queryKeys = {
   projects: ['projects'] as const,
   project: (projectId: string) => ['projects', projectId] as const,
+  versions: (projectId: string) => ['projects', projectId, 'versions'] as const,
 };
 
 export function useProjects() {
@@ -34,6 +37,58 @@ export function useProject(projectId: string | undefined) {
     // A missing or someone else's design won't appear by retrying.
     retry: (failureCount, error) =>
       error instanceof ApiError && error.status === 404 ? false : failureCount < 2,
+  });
+}
+
+/** Version history for the drawer. */
+export function useVersions(projectId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.versions(projectId ?? ''),
+    enabled: enabled && Boolean(projectId),
+    queryFn: ({ signal }) =>
+      apiGet(
+        `/projects/${encodeURIComponent(projectId ?? '')}/versions`,
+        listVersionsResponseSchema,
+        { signal },
+      ),
+  });
+}
+
+/** Saves canvas edits as a new version. */
+export function useSaveEdits(projectId: string | undefined) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (design: Design) =>
+      apiPost(
+        `/projects/${encodeURIComponent(projectId ?? '')}/edits`,
+        { design },
+        projectDetailSchema,
+      ),
+    onSuccess: (project: ProjectDetail) => {
+      queryClient.setQueryData(queryKeys.project(project.id), project);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.versions(project.id) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.projects });
+    },
+  });
+}
+
+/** Brings an older version back as a new version. */
+export function useRestoreVersion(projectId: string | undefined) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (versionId: string) =>
+      apiPost(
+        `/projects/${encodeURIComponent(projectId ?? '')}/versions/${encodeURIComponent(versionId)}/restore`,
+        {},
+        projectDetailSchema,
+      ),
+    onSuccess: (project: ProjectDetail) => {
+      queryClient.setQueryData(queryKeys.project(project.id), project);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.versions(project.id) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.projects });
+    },
   });
 }
 

@@ -27,7 +27,8 @@ test('a signed-in user can create a design from the intake form', async ({ page 
   await expect(page.getByText('API service')).toBeVisible();
   await page.getByText('API service').click();
   const panel = page.getByRole('complementary', { name: 'Component details' });
-  await expect(panel.getByRole('heading', { name: 'API service' })).toBeVisible();
+  // The name is an editable field now that the canvas supports editing.
+  await expect(panel.getByLabel('Component name')).toHaveValue('API service');
   await expect(panel.getByText(/simplest thing that meets these requirements/)).toBeVisible();
   await expect(panel.getByText('Microservices')).toBeVisible();
 
@@ -62,6 +63,52 @@ test('the app chrome stays put: only the content area scrolls', async ({ page })
   // And the form really is scrollable to its end.
   await page.getByRole('button', { name: 'Create design' }).scrollIntoViewIfNeeded();
   await expect(page.getByRole('button', { name: 'Create design' })).toBeInViewport();
+});
+
+test('editing the canvas saves a new version, and an old one can be restored', async ({ page }) => {
+  await signInAsNewUser(page);
+  await page.goto('/designs/new');
+  await page.getByLabel('Core features').fill('playback');
+  await page.getByRole('button', { name: 'Create design' }).click();
+  await page.waitForURL(/\/designs\/[0-9a-f-]{36}$/);
+  // Exact match: "v1" also appears inside the model name "fake-model-v1".
+  await expect(page.getByText('v1', { exact: true })).toBeVisible();
+
+  // Add a component by hand.
+  await page.getByRole('button', { name: 'Add', exact: true }).click();
+  await page.getByLabel('Name').fill('Recommendation Service');
+  await page.getByRole('button', { name: 'Add component' }).click();
+
+  await expect(page.getByText('Unsaved changes')).toBeVisible();
+  await expect(page.getByText('Recommendation Service').first()).toBeVisible();
+
+  // Discarding puts it back.
+  await page.getByRole('button', { name: 'Discard' }).click();
+  await expect(page.getByText('Unsaved changes')).toBeHidden();
+  await expect(page.getByText('Recommendation Service')).toBeHidden();
+
+  // Add it again and save it as v2.
+  await page.getByRole('button', { name: 'Add', exact: true }).click();
+  await page.getByLabel('Name').fill('Recommendation Service');
+  await page.getByRole('button', { name: 'Add component' }).click();
+  await page.getByRole('button', { name: 'Save version' }).click();
+
+  await expect(page.getByText('v2', { exact: true })).toBeVisible();
+  await expect(page.getByText('Unsaved changes')).toBeHidden();
+
+  // The edit survives a reload, so it really was saved.
+  await page.reload();
+  await expect(page.getByText('Recommendation Service').first()).toBeVisible();
+
+  // History lists both versions; restoring v1 removes the added component.
+  await page.getByRole('button', { name: 'Version history' }).click();
+  const drawer = page.getByRole('dialog');
+  await expect(drawer.getByText('v1', { exact: true })).toBeVisible();
+  await expect(drawer.getByText('Added 1 component')).toBeVisible();
+  await drawer.getByRole('button', { name: 'Restore' }).click();
+
+  await expect(page.getByText('v3', { exact: true })).toBeVisible();
+  await expect(page.getByText('Recommendation Service')).toBeHidden();
 });
 
 test("another user's design is not reachable by URL", async ({ page, browser }) => {
