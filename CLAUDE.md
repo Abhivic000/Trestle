@@ -84,7 +84,7 @@ Phase 5 (end-to-end auth tests) is done:
   `TEST_SUPABASE_SECRET_KEY`, `TEST_SUPABASE_PUBLISHABLE_KEY`).
 
 Phase 6 (main features) runs in steps: 6.1 design contract + intake ✅ ·
-6.2 canvas ✅ · 6.3 reference library + retrieval ✅ (pipeline; entries growing) · 6.4 grounded generation ·
+6.2 canvas ✅ · 6.3 reference library + retrieval ✅ · 6.4 grounded generation ✅ · 6.4 grounded generation ·
 6.5 edits + version history · 6.6 change requests (suggest-first diffs) ·
 6.7 industry comparison · 6.8 cost & traffic. Cross-cutting decisions:
 - Design JSON contract lives in `packages/shared/src/design.ts`
@@ -140,6 +140,55 @@ Phase 6 (main features) runs in steps: 6.1 design contract + intake ✅ ·
   genuinely relevant entries. Entries retrieve better when they describe the
   SYMPTOM as well as the mechanism (adding symptom wording to
   `caching-read-through` moved it from outside the top 3 to rank 1).
+- Step 6.4: generation. `POST /projects` now generates the design before it
+  writes anything, so a failure leaves no half-made project (no more placeholder
+  design). Flow: `retrieveEntriesForRequirements` (heuristic queries from the
+  requirements, deduped, best score wins) → `DesignGenerator` → `resolveCitations`
+  (drops slugs that were not supplied, keeping the design honest) → server-side
+  `layoutComponents` (models are bad at coordinates) → `designSchema` validation.
+- Design DEPTH is a prompt property, and the prompt is easy to get wrong. An
+  early version said "prefer the simplest architecture", "4 to 10 components"
+  and "smaller beats larger", and every design came out as
+  client→gateway→service→database. The current prompt instead walks a checklist
+  (edge/CDN, services, caching, datastore + scaling plan, async workers, object
+  storage, search, identity, observability), sizes the component count by daily
+  users, gives the model a computed requests/second estimate, and demands an
+  alternative + tradeoff on EVERY component plus a named future bottleneck.
+  Same requirements went from 5 components to 11, all grounded. Re-check this
+  after any prompt edit: shallow output usually means the prompt asked for it.
+- Gemini models: `gemini-3.6-flash` is nearly always 503 "high demand" on the
+  free tier, so `DEFAULT_MODEL_CHAIN` falls through to `gemini-3.5-flash-lite`
+  and `gemini-flash-lite-latest`. `gemini-2.5-flash*` are retired for new keys.
+  Structured output (`responseMimeType` + `responseSchema`) works well; drafts
+  are validated with Zod and retried once with the error fed back. Real run:
+  ~16s, 13 entries retrieved, 7 components, 6/7 citing a source.
+- AI services are injected: `createApp(dependencies)` with `AppDependencies`
+  (`embedder`, `designGenerator`). Tests pass fakes; `USE_FAKE_AI=true` in
+  `apps/api/.env.test` makes the e2e server deterministic and free.
+- Per-account limit: `DAILY_AI_LIMIT` (20) counted from the `ai_requests` table
+  over a rolling 24h, enforced before any model call.
+- Canvas presentation rules (learned from real generated designs): node labels
+  are long, so nodes are 216px wide and wrap to two lines rather than truncating;
+  `NODE_WIDTH` in `DesignNode.tsx` must match `COLUMN_WIDTH` in the server
+  `layout.ts`. Layout compacts unused role columns, otherwise fit-to-view shrinks
+  the text. Edges are smoothstep with arrow markers and labels on opaque pills.
+  Technology names get brand icons via `simple-icons` (`technology-icons.ts`);
+  there are no Amazon/AWS icons in that set, so those fall back to the role icon.
+- React Flow paints NODES ABOVE EDGE LABELS, so a label wider than the gap
+  between columns is hidden behind a box, not drawn over it. CSS truncation does
+  not help: `shortenEdgeLabel` (`edge-label.ts`) shortens the text itself to 14
+  characters at a word boundary, with the full text in the native `title`.
+  Labels are hidden below 0.55 zoom. `layoutComponents` now lives in
+  `@trestle/shared` so the browser's "Tidy layout" button re-spaces an old design
+  with exactly the server's layout (visual only until saving lands in 6.5).
+- The canvas follows normal architecture-diagram conventions: left-to-right
+  lanes (Clients → Edge → Services → Caching & async → Data & storage →
+  External) with aligned column captions generated in `buildLaneHeaders`, and
+  component names are never truncated. `COLUMN_BY_KIND` in the shared layout is
+  the single definition of that reading order.
+- Models paste citation slugs into prose ("...[auth-use-managed-identity-provider]").
+  `stripInlineCitations` removes them before storage, and the prompt forbids it.
+  Sources belong only in `sources[]`.
 - Any label wrapping an `sr-only` (visually hidden, absolutely positioned) input
   MUST also be `relative`. Without it the input anchors to the document instead
   of the label, which grew the page past the `h-dvh` app shell and produced a
@@ -222,6 +271,10 @@ from it without asking. Remove an item once it ships.
     proves too blunt once generation is using it (step 6.4 will show).
 18. Show library sources in the UI (the Compare tab and the rationale panel's
     "grounded" state) once generation cites them.
+19. Designs generated before the layout change keep their old, wider spacing;
+    a "Tidy layout" action would re-run `layoutComponents` on an existing design.
+20. Edge label pills can still overlap a node edge on dense designs; consider
+    showing labels only on hover/selection.
 
 ## Screens required (per PRD user flows)
 

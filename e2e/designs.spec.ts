@@ -22,16 +22,14 @@ test('a signed-in user can create a design from the intake form', async ({ page 
   await expect(page).toHaveURL(/\/designs\/[0-9a-f-]{36}$/);
   await expect(page.getByText('Media streaming').first()).toBeVisible();
   await expect(page.getByText('v1')).toBeVisible();
-  await expect(page.getByText('Placeholder design')).toBeVisible();
-
-  // The diagram renders the design's components, and clicking one explains it.
-  await expect(page.getByText('API gateway')).toBeVisible();
-  await page.getByText('API gateway').click();
+  // The diagram renders the generated design, and clicking a box explains it.
+  // (The test server runs with USE_FAKE_AI=true, so the design is deterministic.)
+  await expect(page.getByText('API service')).toBeVisible();
+  await page.getByText('API service').click();
   const panel = page.getByRole('complementary', { name: 'Component details' });
-  await expect(panel.getByRole('heading', { name: 'API gateway' })).toBeVisible();
-  await expect(panel.getByText(/Keeps authentication and routing in one place/)).toBeVisible();
-  await expect(panel.getByText(/Ungrounded/)).toBeVisible();
-  await expect(panel.getByText('Clients call each service directly')).toBeVisible();
+  await expect(panel.getByRole('heading', { name: 'API service' })).toBeVisible();
+  await expect(panel.getByText(/simplest thing that meets these requirements/)).toBeVisible();
+  await expect(panel.getByText('Microservices')).toBeVisible();
 
   // And it appears in the list, which is reloaded from the API.
   await page.getByRole('link', { name: 'My designs' }).click();
@@ -83,6 +81,6 @@ test("another user's design is not reachable by URL", async ({ page, browser }) 
   await otherPage.goto(designUrl);
 
   await expect(otherPage.getByRole('alert')).toContainText('Design not found');
-  await expect(otherPage.getByText('API gateway')).toBeHidden();
+  await expect(otherPage.getByText('API service')).toBeHidden();
   await otherContext.close();
 });

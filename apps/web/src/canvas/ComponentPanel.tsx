@@ -2,6 +2,7 @@ import type { DesignComponent } from '@trestle/shared';
 import { ShieldAlert } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { componentKindStyles } from './component-kinds';
+import { TechnologyBadge } from './TechnologyBadge';
 
 interface ComponentPanelProps {
   component: DesignComponent | null;
@@ -39,9 +40,11 @@ export function ComponentPanel({ component }: ComponentPanelProps) {
           <div className="flex items-center gap-1.5 font-mono text-[10px] tracking-wide text-tertiary uppercase">
             <Icon className="size-3.5" aria-hidden="true" />
             {kindLabel}
-            {component.technology ? ` · ${component.technology}` : ''}
           </div>
           <h2 className="mt-1 text-[15px] font-semibold">{component.label}</h2>
+          {component.technology && (
+            <TechnologyBadge technology={component.technology} className="mt-1.5 py-1" />
+          )}
           <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
             {component.responsibility}
           </p>

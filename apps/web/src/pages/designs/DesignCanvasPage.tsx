@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { History, Info, LoaderCircle, Monitor } from 'lucide-react';
+import { History, Info, LayoutGrid, LoaderCircle, Monitor } from 'lucide-react';
 import { Link, useParams } from 'react-router';
 import { ComponentPanel } from '@/canvas/ComponentPanel';
 import { DesignCanvas } from '@/canvas/DesignCanvas';
@@ -16,6 +16,7 @@ export function DesignCanvasPage() {
   const { designId } = useParams();
   const { data: project, isPending, error } = useProject(designId);
   const [selectedComponentId, setSelectedComponentId] = useState<string | null>(null);
+  const [tidyLayout, setTidyLayout] = useState(false);
 
   const design = project?.currentVersion.design;
   const selectedComponent =
@@ -45,10 +46,26 @@ export function DesignCanvasPage() {
             </span>
           )}
         </div>
-        <Button variant="ghost" size="sm" disabled title="Coming soon">
-          <History data-icon="inline-start" />
-          Version history
-        </Button>
+        <div className="flex shrink-0 items-center gap-1">
+          {design && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setTidyLayout((value) => !value);
+              }}
+              aria-pressed={tidyLayout}
+              title="Re-space the diagram using the standard layout (not saved yet)"
+            >
+              <LayoutGrid data-icon="inline-start" />
+              {tidyLayout ? 'Original layout' : 'Tidy layout'}
+            </Button>
+          )}
+          <Button variant="ghost" size="sm" disabled title="Coming soon">
+            <History data-icon="inline-start" />
+            Version history
+          </Button>
+        </div>
       </div>
 
       {/* Below lg the panel stacks under the canvas, so selecting a box still
@@ -79,6 +96,7 @@ export function DesignCanvasPage() {
                 design={design}
                 selectedComponentId={selectedComponentId}
                 onSelectComponent={setSelectedComponentId}
+                tidyLayout={tidyLayout}
               />
               <p className="pointer-events-none absolute top-3 left-3 z-10 max-w-md rounded-lg border bg-background/85 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground backdrop-blur-sm">
                 {design.summary}

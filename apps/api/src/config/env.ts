@@ -17,6 +17,14 @@ const envSchema = z.object({
   SUPABASE_URL: z.url(),
   SUPABASE_SECRET_KEY: z.string().startsWith('sb_secret_', 'must be a Supabase secret key'),
   GEMINI_API_KEY: z.string().min(1),
+  /**
+   * Use deterministic fake AI services instead of calling Google. Set for the
+   * browser tests so they never spend quota or depend on model availability.
+   */
+  USE_FAKE_AI: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((value) => value === 'true'),
 });
 
 export type Env = z.infer<typeof envSchema>;

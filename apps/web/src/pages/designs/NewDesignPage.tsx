@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import {
   availabilityTargetLabels,
   availabilityTargets,
@@ -16,7 +16,7 @@ import {
   type RequirementsInput,
 } from '@trestle/shared';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, LoaderCircle } from 'lucide-react';
 import { Controller, useForm } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router';
 import { Button } from '@/components/ui/button';
@@ -27,6 +27,40 @@ import { paths } from '@/lib/paths';
 import { ChoiceGroup, Field, TagListInput } from './intake-fields';
 
 const DRAFT_KEY = 'trestle:intake-draft';
+
+/**
+ * Shown while the AI works. Generation takes roughly 10–30 seconds on the free
+ * tier, so the wait is explained and timed rather than left as a bare spinner.
+ */
+function GeneratingDesign() {
+  const [seconds, setSeconds] = useState(0);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setSeconds((value) => value + 1);
+    }, 1000);
+    return () => {
+      clearInterval(timer);
+    };
+  }, []);
+
+  return (
+    <div className="flex flex-1 items-center justify-center px-4 py-12">
+      <title>Generating your design · Trestle</title>
+      <div className="bg-blueprint flex max-w-md flex-col items-center rounded-2xl border px-8 py-12 text-center">
+        <LoaderCircle className="size-7 animate-spin text-brand" aria-hidden="true" />
+        <h1 className="mt-5 text-lg font-semibold" role="status">
+          Designing your system
+        </h1>
+        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+          Finding the patterns that match your requirements, then drafting an architecture and the
+          reasoning behind each component.
+        </p>
+        <p className="mt-4 font-mono text-xs text-tertiary">{seconds}s elapsed · usually 10–30s</p>
+      </div>
+    </div>
+  );
+}
 
 const defaultValues: RequirementsInput = {
   projectType: 'web_app',
@@ -100,6 +134,10 @@ export function NewDesignPage() {
       // ignore
     }
     await navigate(paths.design(project.id));
+  }
+
+  if (createProject.isPending) {
+    return <GeneratingDesign />;
   }
 
   return (
@@ -348,23 +386,28 @@ export function NewDesignPage() {
           </Field>
 
           {createProject.isError && (
-            <p role="alert" className="text-sm text-danger">
-              Could not create the design:{' '}
-              {createProject.error instanceof Error ? createProject.error.message : 'unknown error'}
-            </p>
+            <div
+              role="alert"
+              className="rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger"
+            >
+              <p className="font-medium">Could not generate your design.</p>
+              <p className="mt-1">
+                {createProject.error instanceof Error
+                  ? createProject.error.message
+                  : 'Unknown error.'}
+              </p>
+              <p className="mt-1.5 text-xs opacity-80">
+                Your answers are still here: press Create design to try again.
+              </p>
+            </div>
           )}
 
           <div className="flex justify-end gap-3">
             <Button asChild variant="outline" size="lg" className="h-10">
               <Link to={paths.designs}>Cancel</Link>
             </Button>
-            <Button
-              type="submit"
-              size="lg"
-              className="h-10 font-semibold"
-              disabled={createProject.isPending}
-            >
-              {createProject.isPending ? 'Creating…' : 'Create design'}
+            <Button type="submit" size="lg" className="h-10 font-semibold">
+              Create design
             </Button>
           </div>
         </form>

@@ -5,12 +5,13 @@ import helmet from 'helmet';
 import { pinoHttp } from 'pino-http';
 import { requireAuth } from './auth/require-auth';
 import { env } from './config/env';
+import { createDefaultDependencies, type AppDependencies } from './deps';
 import { logger } from './logger';
 import { errorHandler, notFoundHandler } from './middleware/error-handler';
-import { corpusRouter } from './routes/corpus';
+import { createCorpusRouter } from './routes/corpus';
 import { healthRouter } from './routes/health';
 import { meRouter } from './routes/me';
-import { projectsRouter } from './routes/projects';
+import { createProjectsRouter } from './routes/projects';
 
 // Routers see a URL with their mount path removed; Express keeps the original.
 function fullUrl(req: { url?: string; originalUrl?: string }) {
@@ -18,10 +19,10 @@ function fullUrl(req: { url?: string; originalUrl?: string }) {
 }
 
 /**
- * Builds the Express app without starting it, so tests can exercise it directly.
- * Middleware runs top to bottom for every request; order matters.
+ * Builds the Express app without starting it, so tests can exercise it directly
+ * and inject fake AI services. Middleware runs top to bottom; order matters.
  */
-export function createApp() {
+export function createApp(dependencies: AppDependencies = createDefaultDependencies()) {
   const app = express();
 
   app.disable('x-powered-by');
@@ -63,8 +64,8 @@ export function createApp() {
 
   // Everything below requires a signed-in user.
   app.use('/me', requireAuth, meRouter);
-  app.use('/projects', requireAuth, projectsRouter);
-  app.use('/corpus', requireAuth, corpusRouter);
+  app.use('/projects', requireAuth, createProjectsRouter(dependencies));
+  app.use('/corpus', requireAuth, createCorpusRouter(dependencies));
 
   app.use(notFoundHandler); // no route matched
   app.use(errorHandler); // must be last

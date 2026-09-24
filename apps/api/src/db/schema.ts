@@ -62,12 +62,30 @@ export const designVersions = pgTable(
     // when the generation feature is built.
     designJson: jsonb('design_json').notNull(),
     changeSummary: text('change_summary'),
+    /** Which AI model produced this version, if any (null for manual edits). */
+    generatorModel: text('generator_model'),
     createdAt: timestamps.createdAt,
   },
   // Version numbers are unique within a project (v1, v2, ...). Versions are never updated.
   (table) => [
     unique('design_versions_project_version_uq').on(table.projectId, table.versionNumber),
   ],
+).enableRLS();
+
+/** One row per AI action, used to enforce the per-account daily limit. */
+export const aiRequests = pgTable(
+  'ai_requests',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => authUsers.id, { onDelete: 'cascade' }),
+    /** 'generate' | 'change_request' */
+    kind: text('kind').notNull(),
+    model: text('model').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index('ai_requests_user_created_idx').on(table.userId, table.createdAt)],
 ).enableRLS();
 
 /**

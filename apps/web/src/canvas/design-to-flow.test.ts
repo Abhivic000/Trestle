@@ -1,6 +1,6 @@
 import { DESIGN_SCHEMA_VERSION, designSchema, type Design } from '@trestle/shared';
 import { describe, expect, it } from 'vitest';
-import { designToFlow } from './design-to-flow';
+import { designToFlow, isDesignNode } from './design-to-flow';
 
 const design: Design = designSchema.parse({
   schemaVersion: DESIGN_SCHEMA_VERSION,
@@ -34,14 +34,26 @@ describe('designToFlow', () => {
   it('maps components to positioned nodes of our custom type', () => {
     const { nodes } = designToFlow(design);
 
-    expect(nodes).toHaveLength(2);
-    expect(nodes[0]).toMatchObject({
+    const componentNodes = nodes.filter(isDesignNode);
+    expect(componentNodes).toHaveLength(2);
+    expect(componentNodes[0]).toMatchObject({
       id: 'svc-orders',
       type: 'designComponent',
       position: { x: 10, y: 20 },
     });
-    expect(nodes[0]?.data.component.label).toBe('Orders Service');
-    expect(nodes[0]?.data.status).toBe('unchanged');
+    expect(componentNodes[0]?.data.component.label).toBe('Orders Service');
+    expect(componentNodes[0]?.data.status).toBe('unchanged');
+  });
+
+  it('adds a lane caption above each column', () => {
+    const { nodes } = designToFlow(design);
+    const lanes = nodes.filter((node) => node.type === 'laneHeader');
+
+    // Two components in different columns: two captions, above their columns.
+    expect(lanes).toHaveLength(2);
+    expect(lanes.map((lane) => lane.data.title)).toEqual(['Services', 'Caching & async']);
+    expect(lanes[0]?.position.y).toBeLessThan(20);
+    expect(lanes[0]?.selectable).toBe(false);
   });
 
   it('maps connections to edges and animates asynchronous ones', () => {
