@@ -15,6 +15,15 @@ if (new URL(API_URL).port !== apiEnv.PORT) {
   );
 }
 
+// Browser tests must never call the real AI: it costs quota, and the free-tier
+// models are often busy, which would make these tests fail at random. Missing
+// this in CI once cost a 30-second timeout instead of a clear message.
+if (apiEnv.USE_FAKE_AI !== 'true') {
+  throw new Error(
+    'apps/api/.env.test must set USE_FAKE_AI=true so the browser tests use the deterministic fake AI.',
+  );
+}
+
 const isCI = Boolean(process.env.CI);
 
 export default defineConfig({

@@ -165,6 +165,12 @@ Phase 6 (main features) runs in steps: 6.1 design contract + intake ✅ ·
 - AI services are injected: `createApp(dependencies)` with `AppDependencies`
   (`embedder`, `designGenerator`). Tests pass fakes; `USE_FAKE_AI=true` in
   `apps/api/.env.test` makes the e2e server deterministic and free.
+  CI builds that file from secrets in `.github/workflows/ci.yml`, so ANY new
+  variable must be added in BOTH places (`.env.test.example` and the workflow's
+  heredoc). Forgetting `USE_FAKE_AI` there made CI call the real Gemini API with
+  a placeholder key and every design-creation e2e test timed out. `playwright.config.ts`
+  now refuses to start unless `USE_FAKE_AI=true`, so that mistake fails in
+  seconds with a clear message.
 - Per-account limit: `DAILY_AI_LIMIT` (20) counted from the `ai_requests` table
   over a rolling 24h, enforced before any model call.
 - Canvas presentation rules (learned from real generated designs): node labels

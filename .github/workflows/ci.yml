@@ -64,6 +64,9 @@ jobs:
             echo "SUPABASE_SECRET_KEY=$TEST_SUPABASE_SECRET_KEY"
             echo "SUPABASE_PUBLISHABLE_KEY=$TEST_SUPABASE_PUBLISHABLE_KEY"
             echo "GEMINI_API_KEY=unused-in-tests"
+            # Deterministic fake AI: no quota, no dependence on model availability.
+            # Without this the browser tests call the real API with a placeholder key.
+            echo "USE_FAKE_AI=true"
           } > apps/api/.env.test
           {
             echo "VITE_API_URL=http://localhost:4001"
