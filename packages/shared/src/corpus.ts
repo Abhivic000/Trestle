@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { ComponentKind } from './design';
 
 /*
  * The reference library: curated, hand-written pattern summaries that ground the
@@ -80,6 +81,67 @@ export const searchCorpusResponseSchema = z.object({
 });
 
 export type SearchCorpusResponse = z.infer<typeof searchCorpusResponseSchema>;
+
+/**
+ * Real systems that solved the same problem as one component, looked up when
+ * the Compare tab is opened rather than stored in the design. Keeping it out of
+ * the design means an improved library improves old designs too, and that
+ * components added by hand get comparisons as well.
+ */
+export const componentComparisonsResponseSchema = z.object({
+  componentId: z.string(),
+  comparisons: z.array(corpusSearchResultSchema),
+});
+
+export type ComponentComparisonsResponse = z.infer<typeof componentComparisonsResponseSchema>;
+
+/**
+ * Which library topics can sensibly be compared against a component of each
+ * kind.
+ *
+ * Similarity alone is not enough here. Embedding scores between a component and
+ * an unrelated entry still land around 0.6, so a plain nearest-neighbour search
+ * will confidently offer a block-storage case study for a generic service.
+ * Narrowing to plausible topics first, then ranking by similarity inside that
+ * set, uses the structure we already know instead of guessing from prose.
+ *
+ * An empty list means "we have nothing worth comparing", which is a better
+ * answer than the closest wrong thing.
+ */
+export const comparisonTopicsByComponentKind: Record<ComponentKind, PatternType[]> = {
+  client: [],
+  cdn: ['cdn'],
+  gateway: ['cdn', 'rate-limiting'],
+  service: ['cost', 'consistency'],
+  worker: ['queuing'],
+  cache: ['caching'],
+  queue: ['queuing'],
+  database: ['sharding', 'replication', 'consistency'],
+  storage: ['storage'],
+  search: ['search'],
+  external: ['auth', 'observability'],
+};
+
+/**
+ * The text we search the library with for a component: its name, what it does
+ * and the technology chosen. Shared so the API and its tests agree, and so the
+ * query is easy to reason about when a match looks wrong.
+ */
+export function componentComparisonQuery(component: {
+  label: string;
+  kind: string;
+  responsibility: string;
+  technology?: string;
+}): string {
+  return [
+    component.label,
+    component.technology ?? '',
+    `Role: ${component.kind}`,
+    component.responsibility,
+  ]
+    .filter((part) => part !== '')
+    .join('\n');
+}
 
 /**
  * The text that gets embedded for an entry. Kept in one place so the API, the

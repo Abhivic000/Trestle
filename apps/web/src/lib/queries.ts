@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import {
   changeProposalResponseSchema,
+  componentComparisonsResponseSchema,
   createProjectRequestSchema,
   listProjectsResponseSchema,
   listVersionsResponseSchema,
@@ -21,6 +22,8 @@ export const queryKeys = {
   projects: ['projects'] as const,
   project: (projectId: string) => ['projects', projectId] as const,
   versions: (projectId: string) => ['projects', projectId, 'versions'] as const,
+  comparisons: (projectId: string, componentId: string) =>
+    ['projects', projectId, 'components', componentId, 'comparisons'] as const,
 };
 
 export function useProjects() {
@@ -53,6 +56,34 @@ export function useVersions(projectId: string | undefined, enabled = true) {
         listVersionsResponseSchema,
         { signal },
       ),
+  });
+}
+
+/**
+ * Real systems that solved the same problem as one component.
+ *
+ * Only fetched when the Compare tab is actually open, and kept for the session
+ * once loaded: the library changes rarely, so clicking between components
+ * should not re-run the search every time.
+ */
+export function useComponentComparisons(
+  projectId: string | undefined,
+  componentId: string | undefined,
+  enabled: boolean,
+) {
+  return useQuery({
+    queryKey: queryKeys.comparisons(projectId ?? '', componentId ?? ''),
+    enabled: enabled && Boolean(projectId) && Boolean(componentId),
+    staleTime: Infinity,
+    queryFn: ({ signal }) =>
+      apiGet(
+        `/projects/${encodeURIComponent(projectId ?? '')}/components/${encodeURIComponent(componentId ?? '')}/comparisons`,
+        componentComparisonsResponseSchema,
+        { signal },
+      ),
+    // A component the server doesn't know about won't appear by retrying.
+    retry: (failureCount, error) =>
+      error instanceof ApiError && error.status === 404 ? false : failureCount < 2,
   });
 }
 

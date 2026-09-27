@@ -257,6 +257,7 @@ export function DesignCanvasPage() {
         >
           <ComponentPanel
             component={selectedComponent}
+            projectId={designId}
             onRename={selectedComponent ? handleRename : undefined}
           />
         </aside>

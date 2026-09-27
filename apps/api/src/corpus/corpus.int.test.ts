@@ -107,12 +107,20 @@ describe('reference library search', () => {
   it('ranks the closest entry first and orders the rest by similarity', async () => {
     const results = await searchCorpus(db, embedder, {
       query: 'we need a cache because the same items are read over and over',
-      limit: 3,
+      limit: 50,
       minSimilarity: 0,
     });
 
-    expect(results[0]?.slug).toBe('it-cache');
-    expect(results[0]?.similarity).toBeGreaterThan(results[1]?.similarity ?? 1);
+    // The table is shared with the seeded reference library, so assert the
+    // ordering among this test's own fixtures rather than assuming they are
+    // the only rows present.
+    const ours = results.filter((result) => result.slug.startsWith('it-'));
+    expect(ours[0]?.slug).toBe('it-cache');
+    expect(ours[0]?.similarity).toBeGreaterThan(ours[1]?.similarity ?? 1);
+
+    // Results overall come back strongest first.
+    const scores = results.map((result) => result.similarity);
+    expect([...scores].sort((a, b) => b - a)).toEqual(scores);
   });
 
   it('can be narrowed to one pattern type', async () => {

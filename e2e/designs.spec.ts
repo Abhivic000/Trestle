@@ -158,6 +158,27 @@ test('a change request is previewed and applied only when accepted', async ({ pa
   await expect(page.getByRole('dialog').getByText(/add live chat between users/)).toBeVisible();
 });
 
+test('the Compare tab shows a real system, or admits there is no close match', async ({ page }) => {
+  await signInAsNewUser(page);
+  await page.goto('/designs/new');
+  await page.getByLabel('Core features').fill('uploads');
+  await page.getByRole('button', { name: 'Create design' }).click();
+  await page.waitForURL(/\/designs\/[0-9a-f-]{36}$/);
+
+  const panel = page.getByRole('complementary', { name: 'Component details' });
+
+  // A storage component has a matching case study in the reference library.
+  await page.getByText('Object Storage for Media Files').click();
+  await panel.getByRole('tab', { name: 'Compare' }).click();
+  await expect(panel.getByRole('heading', { name: /Dropbox/ })).toBeVisible();
+  await expect(panel.getByRole('link', { name: /Read the original/ }).first()).toBeVisible();
+
+  // A plain client has nothing worth comparing, and the panel says so rather
+  // than offering the nearest unrelated entry.
+  await page.getByText('Web & Mobile Clients').click();
+  await expect(panel.getByText(/No close match in the reference library/)).toBeVisible();
+});
+
 test("another user's design is not reachable by URL", async ({ page, browser }) => {
   // First user creates a design and we note its address.
   await signInAsNewUser(page);

@@ -86,7 +86,7 @@ Phase 5 (end-to-end auth tests) is done:
 Phase 6 (main features) runs in steps: 6.1 design contract + intake ✅ ·
 6.2 canvas ✅ · 6.3 reference library + retrieval ✅ · 6.4 grounded generation ✅ ·
 6.5 edits + version history ✅ · 6.6 change requests (suggest-first diffs) ✅ ·
-6.7 industry comparison · 6.8 cost & traffic. Cross-cutting decisions:
+6.7 industry comparison ✅ · 6.8 cost & traffic. Cross-cutting decisions:
 - Design JSON contract lives in `packages/shared/src/design.ts`
   (`schemaVersion` 1, components/connections/dataModel, `sources[]` per
   component for grounding, node positions inside the design so versions capture
@@ -245,6 +245,42 @@ Phase 6 (main features) runs in steps: 6.1 design contract + intake ✅ ·
   cited a source; connection operations rarely cite, which is expected).
   "drop the cache layer" correctly returned remove_connection + remove_component
   and nothing else. Re-run a check like this after any change-prompt edit.
+- Step 6.7: the Compare tab. Comparisons are looked up ON DEMAND
+  (`GET /projects/:id/components/:componentId/comparisons`) when the tab is
+  opened, not stored in the design. That was a deliberate choice: the comparison
+  is reference material rather than part of the decision record, so growing the
+  library improves designs that already exist, and components the user added by
+  hand get comparisons too. The browser caches per component with
+  `staleTime: Infinity`, so switching components does not re-search.
+- Comparisons come only from `kind: 'comparison'` library entries, never from
+  the model. An LLM asked to describe how a named company works will invent
+  details, so the Compare tab must stay traceable to a checked write-up.
+- SIMILARITY ALONE IS NOT ENOUGH for this. With the real embedder, an unrelated
+  component and entry still score around 0.6, so a plain nearest-neighbour
+  search confidently offered Dropbox's block storage as the comparison for a
+  generic "Meme Core Service", and all 14 components of a real design "matched".
+  `comparisonTopicsByComponentKind` (shared) narrows to plausible pattern types
+  for the component's kind FIRST, then similarity ranks within that set. After
+  that every top hit was right: cache→Facebook memcache, queue→Slack, search→
+  GitHub code search, storage→Dropbox, database→Figma/Notion sharding, identity→
+  BeyondCorp, observability→Dapper, gateway→Zuul, service→Segment. A kind with
+  no listed topics (`client`) returns nothing and the UI says so, which is
+  better than the closest wrong thing; the search skips the embedding call
+  entirely in that case.
+- Library grew to 40 entries (24 patterns, 16 comparisons). Every `sourceUrl`
+  was checked with an actual request before being committed: one candidate URL
+  was a 404 and one had moved (Segment's blog now redirects to twilio.com).
+  Medium-hosted posts (`netflixtechblog.com`) return 403 to any automated fetch,
+  so they cannot be verified and were replaced with sources that can be.
+- Browser tests need the library in the test database, so `global-setup.ts`
+  seeds it via `seedCorpusForTests`, embedding with the FAKE embedder because
+  the test server searches with the fake embedder: vectors must come from the
+  same model as the query or every lookup returns nothing. It seeds with
+  `prune: false` so it never deletes fixtures another suite created. Note that
+  `corpus:ingest:test` is a different thing and calls the REAL embedding API,
+  which fails against the placeholder key in `.env.test`.
+- Because the corpus table is shared, integration tests must not assume it holds
+  only their own fixtures: the ranking test now filters to its own slugs.
 - Deleting a component must also drop its connections and data-model entries, or
   the design fails `designSchema`'s referential checks on save.
 - NEVER write files containing non-ASCII (…, ·) with PowerShell `Set-Content`:
@@ -325,12 +361,15 @@ from it without asking. Remove an item once it ships.
     form enforces 8, the server default is 6.
 15. Supabase region is Tokyo (~280ms/query for the owner); moving means a new
     project. Decided to keep for now.
-16. Reference library: grow past 30 entries (thin on auth, observability,
-    consistency; no entries yet for realtime/websockets or ML-ish workloads).
+16. Reference library: grow past 40 entries. Comparisons now cover the common
+    component kinds, but there is still nothing for realtime/websockets,
+    ML-ish workloads, or payments, and only one comparison per topic for
+    several topics (so the Compare tab often has a single card).
 17. Retrieval: add keyword+vector hybrid search if topic-filtered similarity
     proves too blunt once generation is using it (step 6.4 will show).
-18. Show library sources in the UI (the Compare tab and the rationale panel's
-    "grounded" state) once generation cites them.
+18. The rationale panel still only says "Ungrounded" or nothing; it should name
+    and link the library entries a component's `sources[]` actually cites, the
+    way the Compare tab now does. (The Compare half of this shipped in 6.7.)
 19. Designs generated before the layout change keep their old, wider spacing;
     a "Tidy layout" action would re-run `layoutComponents` on an existing design.
 20. Edge label pills can still overlap a node edge on dense designs; consider

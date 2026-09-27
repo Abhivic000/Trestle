@@ -2,6 +2,8 @@ import {
   acceptChangeRequestSchema,
   applyChangeOperations,
   changeOperationSchema,
+  comparisonTopicsByComponentKind,
+  componentComparisonQuery,
   createChangeRequestSchema,
   createProjectRequestSchema,
   designSchema,
@@ -9,6 +11,7 @@ import {
   requirementsSchema,
   saveEditsRequestSchema,
   type ChangeProposalResponse,
+  type ComponentComparisonsResponse,
   type Design,
   type ListProjectsResponse,
   type ListVersionsResponse,
@@ -20,6 +23,7 @@ import { z } from 'zod';
 import { GenerationError } from '../ai/design-generator';
 import { assertWithinDailyAiLimit, recordAiRequest } from '../ai/usage';
 import { currentUser } from '../auth/require-auth';
+import { searchCorpus } from '../corpus/search';
 import { db, type Database } from '../db/client';
 import { changeProposals, designVersions, projects } from '../db/schema';
 import { generateDesign } from '../designs/generate-design';
@@ -30,6 +34,13 @@ import { HttpError } from '../errors';
 
 /** Generation is slow but not unbounded; give up rather than hang the browser. */
 const GENERATION_TIMEOUT_MS = 90_000;
+
+/**
+ * Comparisons are shown to the user as "this is how X solved it", so a weak
+ * match is worse than none. This is deliberately stricter than the threshold
+ * used when gathering material for a prompt.
+ */
+const COMPARISON_MIN_SIMILARITY = 0.45;
 
 /** Anything that isn't an id can't exist: 404 rather than a database error. */
 function parseProjectId(value: string | undefined, message = 'Design not found.'): string {
@@ -389,6 +400,33 @@ export function createProjectsRouter({
       .where(eq(changeProposals.id, proposalId));
 
     res.status(204).send();
+  });
+
+  /**
+   * Real systems that solved the same problem as this component.
+   *
+   * Looked up on demand instead of being stored in the design, so that growing
+   * the reference library improves designs that already exist, and components
+   * the user added by hand get comparisons too.
+   */
+  router.get('/:projectId/components/:componentId/comparisons', async (req, res) => {
+    const user = currentUser(req);
+    const projectId = parseProjectId(req.params.projectId);
+    const design = await loadCurrentDesign(db, projectId, user.id);
+
+    const component = design.components.find((item) => item.id === req.params.componentId);
+    if (!component) throw new HttpError(404, 'not_found', 'Component not found.');
+
+    const comparisons = await searchCorpus(db, embedder, {
+      query: componentComparisonQuery(component),
+      kind: 'comparison',
+      patternTypes: comparisonTopicsByComponentKind[component.kind],
+      limit: 3,
+      minSimilarity: COMPARISON_MIN_SIMILARITY,
+    });
+
+    const body: ComponentComparisonsResponse = { componentId: component.id, comparisons };
+    res.json(body);
   });
 
   /** The version history drawer. */

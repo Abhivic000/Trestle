@@ -2,6 +2,7 @@ import { inArray } from 'drizzle-orm';
 import {
   apiErrorSchema,
   changeProposalResponseSchema,
+  componentComparisonsResponseSchema,
   corpusEntrySchema,
   healthResponseSchema,
   listProjectsResponseSchema,
@@ -79,14 +80,33 @@ const libraryEntries = librarySlugs.map((slug) =>
   }),
 );
 
+// A `comparison` entry about storage, so the Compare tab has a real match for
+// the object-storage component of the fake design, and so we can prove that
+// comparisons never return plain `pattern` entries.
+const comparisonSlug = 'app-int-comparison-storage';
+const comparisonEntry = corpusEntrySchema.parse({
+  slug: comparisonSlug,
+  kind: 'comparison',
+  patternType: 'storage',
+  title: 'Test comparison: object storage at a large product',
+  summary:
+    'Object storage holds uploaded files outside the database. Large products keep media in object storage rather than in rows, because object storage is cheaper per byte, scales independently and serves files directly. The database then stores only a reference to the object storage key.',
+  whenToUse: 'Products where users upload images, video or documents into object storage.',
+  whenNotToUse: 'Small text records, which belong in the database rather than object storage.',
+  tradeoffs: ['Two systems to keep consistent when an upload fails partway.'],
+  sourceNote: 'Based on: test fixture.',
+  sourceUrl: 'https://example.com/object-storage',
+});
+const allLibrarySlugs = [...librarySlugs, comparisonSlug];
+
 beforeAll(async () => {
   [alice, bob] = await Promise.all([createTestUser(), createTestUser()]);
-  await ingestCorpus(db, embedder, libraryEntries, { prune: false });
+  await ingestCorpus(db, embedder, [...libraryEntries, comparisonEntry], { prune: false });
 });
 
 afterAll(async () => {
   await deleteTestUsers(); // deleting the users cascade-deletes their projects
-  await db.delete(corpusEntries).where(inArray(corpusEntries.slug, librarySlugs));
+  await db.delete(corpusEntries).where(inArray(corpusEntries.slug, allLibrarySlugs));
   await sql.end();
 });
 
@@ -563,6 +583,55 @@ describe('change requests (suggest first, never auto-apply)', () => {
 
     // Not their project either, but the limit is checked first.
     expect([404, 429]).toContain(res.status);
+  });
+});
+
+describe('component comparisons', () => {
+  it('returns library comparisons for a component, never plain patterns', async () => {
+    const project = await createProject(alice);
+
+    const res = await request(app)
+      .get(`/projects/${project.id}/components/object-storage/comparisons`)
+      .set(bearer(alice))
+      .expect(200);
+
+    const body = componentComparisonsResponseSchema.parse(res.body);
+    expect(body.componentId).toBe('object-storage');
+    expect(body.comparisons.length).toBeGreaterThan(0);
+    expect(body.comparisons.map((entry) => entry.slug)).toContain(comparisonSlug);
+    // The Compare tab must never show a general pattern as "how a real system did it".
+    expect(body.comparisons.every((entry) => entry.kind === 'comparison')).toBe(true);
+  });
+
+  it('returns nothing for a kind we have no comparable topics for', async () => {
+    const project = await createProject(alice);
+
+    // `client` maps to no topics at all, so this must not fall back to the
+    // nearest unrelated entry.
+    const res = await request(app)
+      .get(`/projects/${project.id}/components/client-app/comparisons`)
+      .set(bearer(alice))
+      .expect(200);
+
+    expect(componentComparisonsResponseSchema.parse(res.body).comparisons).toEqual([]);
+  });
+
+  it('404s for a component that is not in the design', async () => {
+    const project = await createProject(alice);
+
+    await request(app)
+      .get(`/projects/${project.id}/components/no-such-component/comparisons`)
+      .set(bearer(alice))
+      .expect(404);
+  });
+
+  it("404s for someone else's design", async () => {
+    const project = await createProject(alice);
+
+    await request(app)
+      .get(`/projects/${project.id}/components/object-storage/comparisons`)
+      .set(bearer(bob))
+      .expect(404);
   });
 });
 

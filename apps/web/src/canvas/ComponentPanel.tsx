@@ -1,18 +1,25 @@
+import { useState } from 'react';
 import type { DesignComponent } from '@trestle/shared';
 import { ShieldAlert } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ComparePanel } from './ComparePanel';
 import { componentKindStyles } from './component-kinds';
 import { TechnologyBadge } from './TechnologyBadge';
 
 interface ComponentPanelProps {
   component: DesignComponent | null;
+  /** Needed to look up comparisons for the selected component. */
+  projectId?: string;
   /** When set, the name and technology become editable. */
   onRename?: (componentId: string, changes: { label?: string; technology?: string }) => void;
 }
 
-/** Side panel: why a component is there, with Compare and Cost to follow. */
-export function ComponentPanel({ component, onRename }: ComponentPanelProps) {
+/** Side panel: why a component is there, how real systems do it, and cost to follow. */
+export function ComponentPanel({ component, projectId, onRename }: ComponentPanelProps) {
+  // Tracked so the Compare tab only searches the library once it is opened.
+  const [tab, setTab] = useState('rationale');
+
   if (!component) {
     return (
       <div className="flex h-full flex-col">
@@ -25,7 +32,7 @@ export function ComponentPanel({ component, onRename }: ComponentPanelProps) {
   const { icon: Icon, label: kindLabel } = componentKindStyles[component.kind];
 
   return (
-    <Tabs defaultValue="rationale" className="flex h-full min-h-0 flex-col gap-0">
+    <Tabs value={tab} onValueChange={setTab} className="flex h-full min-h-0 flex-col gap-0">
       <TabsList className="grid w-full shrink-0 grid-cols-3 rounded-none border-b border-subtle bg-transparent p-0">
         {['Rationale', 'Compare', 'Cost'].map((tab) => (
           <TabsTrigger
@@ -117,8 +124,12 @@ export function ComponentPanel({ component, onRename }: ComponentPanelProps) {
           )}
         </TabsContent>
 
-        <TabsContent value="compare" className="p-5 text-sm text-tertiary">
-          How comparable systems solve this will appear here, from the reference library.
+        <TabsContent value="compare">
+          <ComparePanel
+            projectId={projectId}
+            componentId={component.id}
+            active={tab === 'compare'}
+          />
         </TabsContent>
         <TabsContent value="cost" className="p-5 text-sm text-tertiary">
           Cost and scaling estimates for this component will appear here.

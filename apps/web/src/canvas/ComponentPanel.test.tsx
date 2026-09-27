@@ -1,8 +1,41 @@
 import { designComponentSchema, type DesignComponent } from '@trestle/shared';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { ApiError } from '@/lib/api';
 import { ComponentPanel } from './ComponentPanel';
+
+// The panel's only server dependency is the comparison lookup, which the
+// Compare tab makes when it opens. Replace it so the panel can be tested
+// without a backend.
+const { comparisonsQuery } = vi.hoisted(() => ({
+  comparisonsQuery: vi.fn(),
+}));
+vi.mock('@/lib/queries', () => ({
+  useComponentComparisons: () => comparisonsQuery() as unknown,
+}));
+
+const loaded = (comparisons: unknown[]) => ({
+  data: { componentId: 'cache-redis', comparisons },
+  isPending: false,
+  isFetching: false,
+  error: null,
+});
+
+const sampleComparison = {
+  id: '6f5b1f3c-9f2a-4f6e-8a1d-2c3b4d5e6f70',
+  slug: 'comparison-facebook-memcache-lookaside',
+  kind: 'comparison',
+  patternType: 'caching',
+  title: 'Facebook: running memcached as a look-aside cache at scale',
+  summary: 'Facebook put a large fleet of memcached servers in front of its databases.',
+  whenToUse: 'Read-heavy workloads where the same rows are fetched constantly.',
+  whenNotToUse: 'Write-heavy or strongly consistent workloads.',
+  tradeoffs: ['Every cache adds an invalidation problem.'],
+  sourceNote: 'Based on: Scaling Memcache at Facebook.',
+  sourceUrl: 'https://example.com/memcache',
+  similarity: 0.74,
+};
 
 const component: DesignComponent = designComponentSchema.parse({
   id: 'cache-redis',
@@ -18,6 +51,11 @@ const component: DesignComponent = designComponentSchema.parse({
 });
 
 describe('ComponentPanel', () => {
+  beforeEach(() => {
+    comparisonsQuery.mockReset();
+    comparisonsQuery.mockReturnValue(loaded([]));
+  });
+
   it('prompts the user to pick a component when nothing is selected', () => {
     render(<ComponentPanel component={null} />);
     expect(screen.getByText('Select a component to see its details.')).toBeInTheDocument();
@@ -46,12 +84,42 @@ describe('ComponentPanel', () => {
 
   it('switches to the Compare and Cost tabs', async () => {
     const user = userEvent.setup();
-    render(<ComponentPanel component={component} />);
+    render(<ComponentPanel component={component} projectId="p1" />);
 
     await user.click(screen.getByRole('tab', { name: 'Compare' }));
-    expect(await screen.findByText(/How comparable systems solve this/)).toBeInTheDocument();
+    expect(await screen.findByText(/No close match in the reference library/)).toBeInTheDocument();
 
     await user.click(screen.getByRole('tab', { name: 'Cost' }));
     expect(await screen.findByText(/Cost and scaling estimates/)).toBeInTheDocument();
+  });
+
+  it('shows a matched real system, with its tradeoffs and a link to the source', async () => {
+    comparisonsQuery.mockReturnValue(loaded([sampleComparison]));
+    const user = userEvent.setup();
+    render(<ComponentPanel component={component} projectId="p1" />);
+
+    await user.click(screen.getByRole('tab', { name: 'Compare' }));
+
+    expect(await screen.findByText(/running memcached as a look-aside cache/)).toBeInTheDocument();
+    expect(screen.getByText('Every cache adds an invalidation problem.')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Read the original/ })).toHaveAttribute(
+      'href',
+      'https://example.com/memcache',
+    );
+  });
+
+  it('explains that an unsaved component cannot be compared yet', async () => {
+    comparisonsQuery.mockReturnValue({
+      data: undefined,
+      isPending: false,
+      isFetching: false,
+      error: new ApiError(404, 'not_found', 'Component not found.'),
+    });
+    const user = userEvent.setup();
+    render(<ComponentPanel component={component} projectId="p1" />);
+
+    await user.click(screen.getByRole('tab', { name: 'Compare' }));
+
+    expect(await screen.findByText(/Save this component first/)).toBeInTheDocument();
   });
 });

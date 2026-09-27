@@ -1,9 +1,10 @@
 import {
   corpusSearchResultSchema,
+  type CorpusKind,
   type CorpusSearchResult,
   type PatternType,
 } from '@trestle/shared';
-import { cosineDistance, desc, eq, gt, isNotNull, sql, and } from 'drizzle-orm';
+import { cosineDistance, desc, eq, gt, inArray, isNotNull, sql, and } from 'drizzle-orm';
 import type { Embedder } from '../ai/embeddings';
 import type { Database } from '../db/client';
 import { corpusEntries } from '../db/schema';
@@ -12,6 +13,10 @@ export interface SearchCorpusOptions {
   query: string;
   /** Narrow to one topic, e.g. only caching entries. */
   patternType?: PatternType;
+  /** Narrow to several topics at once. An empty list matches nothing. */
+  patternTypes?: PatternType[];
+  /** Narrow to general patterns or to named real-world systems. */
+  kind?: CorpusKind;
   limit?: number;
   /** Drop weak matches; 0 keeps everything. */
   minSimilarity?: number;
@@ -27,8 +32,11 @@ export interface SearchCorpusOptions {
 export async function searchCorpus(
   db: Database,
   embedder: Embedder,
-  { query, patternType, limit = 6, minSimilarity = 0.3 }: SearchCorpusOptions,
+  { query, patternType, patternTypes, kind, limit = 6, minSimilarity = 0.3 }: SearchCorpusOptions,
 ): Promise<CorpusSearchResult[]> {
+  // Nothing can match, so don't spend an embedding call finding that out.
+  if (patternTypes?.length === 0) return [];
+
   const [queryEmbedding] = await embedder.embed([query], 'query');
   if (!queryEmbedding) throw new Error('No embedding returned for the search query');
 
@@ -54,6 +62,8 @@ export async function searchCorpus(
       and(
         isNotNull(corpusEntries.embedding),
         patternType ? eq(corpusEntries.patternType, patternType) : undefined,
+        patternTypes ? inArray(corpusEntries.patternType, patternTypes) : undefined,
+        kind ? eq(corpusEntries.kind, kind) : undefined,
         minSimilarity > 0 ? gt(similarity, minSimilarity) : undefined,
       ),
     )
