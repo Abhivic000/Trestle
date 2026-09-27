@@ -1,10 +1,14 @@
 import { and, count, eq, gte } from 'drizzle-orm';
+import { env } from '../config/env';
 import type { Database } from '../db/client';
 import { aiRequests } from '../db/schema';
 import { HttpError } from '../errors';
 
-/** How many AI actions one account may run per rolling 24 hours (free-tier guard). */
-export const DAILY_AI_LIMIT = 20;
+/**
+ * How many AI actions one account may run per rolling 24 hours (free-tier guard).
+ * Configurable because the test suite runs far more than a person would.
+ */
+export const DAILY_AI_LIMIT = env.AI_DAILY_LIMIT;
 
 export type AiRequestKind = 'generate' | 'change_request';
 

@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react';
-import { layoutComponents, type Design } from '@trestle/shared';
+import { layoutComponents, type ChangeStatus, type Design } from '@trestle/shared';
 import {
   Background,
   BackgroundVariant,
@@ -34,6 +34,8 @@ interface DesignCanvasProps {
   tidyLayout?: boolean;
   /** When set, the canvas is editable and reports every change back. */
   onChange?: (design: Design) => void;
+  /** Marks components and connections as added/modified/removed in a preview. */
+  statusById?: Record<string, ChangeStatus>;
 }
 
 /**
@@ -78,8 +80,10 @@ function DesignCanvasInner({
   onSelectComponent,
   tidyLayout = false,
   onChange,
+  statusById,
 }: DesignCanvasProps) {
-  const editable = onChange !== undefined;
+  // While a proposal is on screen the design is read-only: you accept or reject it.
+  const editable = onChange !== undefined && statusById === undefined;
   // Designs generated before the layout was tightened keep their old positions;
   // "Tidy layout" re-runs the very same function the server uses.
   const laidOut = useMemo(() => {
@@ -94,7 +98,10 @@ function DesignCanvasInner({
     };
   }, [design, tidyLayout]);
 
-  const { nodes, edges } = useMemo(() => designToFlow(laidOut), [laidOut]);
+  const { nodes, edges } = useMemo(
+    () => designToFlow(laidOut, (id) => statusById?.[id] ?? 'unchanged'),
+    [laidOut, statusById],
+  );
 
   const nodesWithSelection = useMemo<CanvasNode[]>(
     () => nodes.map((node) => ({ ...node, selected: node.id === selectedComponentId })),

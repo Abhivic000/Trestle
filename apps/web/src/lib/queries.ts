@@ -1,4 +1,6 @@
+import { z } from 'zod';
 import {
+  changeProposalResponseSchema,
   createProjectRequestSchema,
   listProjectsResponseSchema,
   listVersionsResponseSchema,
@@ -89,6 +91,49 @@ export function useRestoreVersion(projectId: string | undefined) {
       void queryClient.invalidateQueries({ queryKey: queryKeys.versions(project.id) });
       void queryClient.invalidateQueries({ queryKey: queryKeys.projects });
     },
+  });
+}
+
+/** Ask for a change in plain language. Returns a proposal; nothing is applied. */
+export function useProposeChange(projectId: string | undefined) {
+  return useMutation({
+    mutationFn: (prompt: string) =>
+      apiPost(
+        `/projects/${encodeURIComponent(projectId ?? '')}/change-request`,
+        { prompt },
+        changeProposalResponseSchema,
+      ),
+  });
+}
+
+/** Apply only the operations the user ticked, as a new version. */
+export function useAcceptChange(projectId: string | undefined) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ proposalId, operationIds }: { proposalId: string; operationIds: string[] }) =>
+      apiPost(
+        `/projects/${encodeURIComponent(projectId ?? '')}/change-request/${encodeURIComponent(proposalId)}/accept`,
+        { operationIds },
+        projectDetailSchema,
+      ),
+    onSuccess: (project: ProjectDetail) => {
+      queryClient.setQueryData(queryKeys.project(project.id), project);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.versions(project.id) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.projects });
+    },
+  });
+}
+
+/** Discard a proposal. The design is untouched. */
+export function useRejectChange(projectId: string | undefined) {
+  return useMutation({
+    mutationFn: (proposalId: string) =>
+      apiPost(
+        `/projects/${encodeURIComponent(projectId ?? '')}/change-request/${encodeURIComponent(proposalId)}/reject`,
+        {},
+        z.unknown(),
+      ),
   });
 }
 

@@ -17,6 +17,8 @@ const envSchema = z.object({
   SUPABASE_URL: z.url(),
   SUPABASE_SECRET_KEY: z.string().startsWith('sb_secret_', 'must be a Supabase secret key'),
   GEMINI_API_KEY: z.string().min(1),
+  /** AI actions allowed per account per rolling 24h. Raised in tests. */
+  AI_DAILY_LIMIT: z.coerce.number().int().positive().max(10_000).default(20),
   /**
    * Use deterministic fake AI services instead of calling Google. Set for the
    * browser tests so they never spend quota or depend on model availability.

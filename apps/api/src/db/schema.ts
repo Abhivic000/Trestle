@@ -72,6 +72,35 @@ export const designVersions = pgTable(
   ],
 ).enableRLS();
 
+/**
+ * A proposed change awaiting the user's decision.
+ *
+ * Proposals are stored, never applied: accepting one writes a new design version
+ * from the operations the user chose. Rejecting simply marks it.
+ */
+export const changeProposals = pgTable(
+  'change_proposals',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    /** The version it was proposed against; it must still be current to accept. */
+    baseVersionId: uuid('base_version_id')
+      .notNull()
+      .references(() => designVersions.id, { onDelete: 'cascade' }),
+    prompt: text('prompt').notNull(),
+    summary: text('summary').notNull(),
+    /** ChangeOperation[] from @trestle/shared. */
+    operations: jsonb('operations').notNull(),
+    model: text('model').notNull(),
+    /** 'pending' | 'accepted' | 'rejected' */
+    status: text('status').notNull().default('pending'),
+    ...timestamps,
+  },
+  (table) => [index('change_proposals_project_idx').on(table.projectId, table.status)],
+).enableRLS();
+
 /** One row per AI action, used to enforce the per-account daily limit. */
 export const aiRequests = pgTable(
   'ai_requests',

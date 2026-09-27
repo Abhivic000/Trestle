@@ -29,6 +29,13 @@
       "when": 1790190415987,
       "tag": "0003_add_ai_requests",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790277522828,
+      "tag": "0004_add_change_proposals",
+      "breakpoints": true
     }
   ]
 }

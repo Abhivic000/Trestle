@@ -67,6 +67,8 @@ jobs:
             # Deterministic fake AI: no quota, no dependence on model availability.
             # Without this the browser tests call the real API with a placeholder key.
             echo "USE_FAKE_AI=true"
+            # The suite does far more AI actions than a person; raise the daily cap.
+            echo "AI_DAILY_LIMIT=100"
           } > apps/api/.env.test
           {
             echo "VITE_API_URL=http://localhost:4001"

@@ -111,6 +111,53 @@ test('editing the canvas saves a new version, and an old one can be restored', a
   await expect(page.getByText('Recommendation Service')).toBeHidden();
 });
 
+test('a change request is previewed and applied only when accepted', async ({ page }) => {
+  await signInAsNewUser(page);
+  await page.goto('/designs/new');
+  await page.getByLabel('Core features').fill('playback');
+  await page.getByRole('button', { name: 'Create design' }).click();
+  await page.waitForURL(/\/designs\/[0-9a-f-]{36}$/);
+
+  // Ask for a change.
+  await page.getByLabel('Describe a change').fill('add live chat between users');
+  await page.getByRole('button', { name: 'Suggest' }).click();
+
+  // It is shown as a proposal, not applied: still v1.
+  const review = page.getByRole('region', { name: 'Proposed changes' });
+  await expect(review).toBeVisible();
+  await expect(review.getByText('Add Live Chat Service')).toBeVisible();
+  await expect(page.getByText('v1', { exact: true })).toBeVisible();
+  // The proposed component is drawn on the canvas as a pending change.
+  await expect(page.getByText('proposed').first()).toBeVisible();
+
+  // Rejecting leaves the design untouched.
+  await review.getByRole('button', { name: 'Reject all' }).click();
+  await expect(review).toBeHidden();
+  await expect(page.getByText('v1', { exact: true })).toBeVisible();
+  await expect(page.getByText('Live Chat Service')).toBeHidden();
+
+  // Ask again, then accept only some of it.
+  await page.getByLabel('Describe a change').fill('add live chat between users');
+  await page.getByRole('button', { name: 'Suggest' }).click();
+  await expect(review).toBeVisible();
+
+  const checkboxes = review.getByRole('checkbox');
+  const total = await checkboxes.count();
+  await checkboxes.last().uncheck();
+  await review
+    .getByRole('button', { name: `Accept ${String(total - 1)} of ${String(total)}` })
+    .click();
+
+  // Now it is saved as v2 and the accepted component is on the canvas.
+  await expect(page.getByText('v2', { exact: true })).toBeVisible();
+  await expect(review).toBeHidden();
+  await expect(page.getByText('Live Chat Service').first()).toBeVisible();
+
+  // The version history records what was asked for.
+  await page.getByRole('button', { name: 'Version history' }).click();
+  await expect(page.getByRole('dialog').getByText(/add live chat between users/)).toBeVisible();
+});
+
 test("another user's design is not reachable by URL", async ({ page, browser }) => {
   // First user creates a design and we note its address.
   await signInAsNewUser(page);

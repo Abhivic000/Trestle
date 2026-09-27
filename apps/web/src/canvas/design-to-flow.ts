@@ -1,6 +1,7 @@
 import {
   COLUMN_BY_KIND,
   LANE_LABELS,
+  type ChangeStatus,
   type ComponentKind,
   type Design,
   type DesignComponent,
@@ -8,11 +9,8 @@ import {
 } from '@trestle/shared';
 import { MarkerType, type Edge, type Node } from '@xyflow/react';
 
-/**
- * Whether a node/edge is part of the saved design or part of a proposed change.
- * Only 'unchanged' is used today; the diff preview (step 6.6) uses the rest.
- */
-export type ChangeStatus = 'unchanged' | 'added' | 'modified' | 'removed';
+/** Whether a node/edge is unchanged or part of a proposed change. */
+export type { ChangeStatus };
 
 export interface DesignNodeData extends Record<string, unknown> {
   component: DesignComponent;

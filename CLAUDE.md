@@ -84,8 +84,8 @@ Phase 5 (end-to-end auth tests) is done:
   `TEST_SUPABASE_SECRET_KEY`, `TEST_SUPABASE_PUBLISHABLE_KEY`).
 
 Phase 6 (main features) runs in steps: 6.1 design contract + intake ✅ ·
-6.2 canvas ✅ · 6.3 reference library + retrieval ✅ · 6.4 grounded generation ✅ · 6.4 grounded generation ·
-6.5 edits + version history ✅ · 6.6 change requests (suggest-first diffs) ·
+6.2 canvas ✅ · 6.3 reference library + retrieval ✅ · 6.4 grounded generation ✅ ·
+6.5 edits + version history ✅ · 6.6 change requests (suggest-first diffs) ✅ ·
 6.7 industry comparison · 6.8 cost & traffic. Cross-cutting decisions:
 - Design JSON contract lives in `packages/shared/src/design.ts`
   (`schemaVersion` 1, components/connections/dataModel, `sources[]` per
@@ -171,8 +171,10 @@ Phase 6 (main features) runs in steps: 6.1 design contract + intake ✅ ·
   a placeholder key and every design-creation e2e test timed out. `playwright.config.ts`
   now refuses to start unless `USE_FAKE_AI=true`, so that mistake fails in
   seconds with a clear message.
-- Per-account limit: `DAILY_AI_LIMIT` (20) counted from the `ai_requests` table
-  over a rolling 24h, enforced before any model call.
+- Per-account limit: `AI_DAILY_LIMIT` (default 20) counted from the `ai_requests`
+  table over a rolling 24h, enforced before any model call. It is configurable
+  because test runs burn through several AI actions per user (100 in `.env.test`);
+  a fixed 20 made the integration suite fail with 429s halfway through.
 - Canvas presentation rules (learned from real generated designs): node labels
   are long, so nodes are 216px wide and wrap to two lines rather than truncating;
   `NODE_WIDTH` in `DesignNode.tsx` must match `COLUMN_WIDTH` in the server
@@ -207,6 +209,42 @@ Phase 6 (main features) runs in steps: 6.1 design contract + intake ✅ ·
   the old design as a NEW version ("Restored version 1"); history is immutable.
 - Adding a component by hand sets an honest rationale ("Added manually...") and
   no sources: never invent reasoning the AI did not produce.
+- Step 6.6: change requests, the product's headline "suggest-first" rule. The AI
+  never edits a design; it returns a PROPOSAL of discrete operations
+  (`packages/shared/src/change-request.ts`: add/modify/remove component,
+  add/remove connection) that the user accepts or rejects one by one. The
+  guarantee is enforced on the SERVER, not just in the UI: proposals are stored
+  in `change_proposals` (status pending/accepted/rejected) and only
+  `POST /projects/:id/change-request/:id/accept` merges the chosen operation ids
+  into a new version. Never add a code path that applies a proposal on its own.
+- A proposal records the version it was made against. If the design has moved on
+  since (a save, a restore, another accept), accepting returns 409
+  `stale_proposal` rather than merging against a design the user never saw.
+  Deciding an already-decided proposal returns 409 `already_decided`.
+- `applyChangeOperations` SKIPS operations that no longer make sense (a
+  connection whose component was rejected, a modify of a component someone
+  deleted) and reports them, instead of failing the whole merge: a user who
+  ticks half a proposal should still get a valid design. The merged result is
+  re-validated with `designSchema` before it is saved (422 `invalid_result`).
+- `buildChangePreview` powers the canvas overlay: additions and modifications
+  are applied, but REMOVALS stay drawn and marked "removed", so the user can see
+  what would disappear. It reuses the `statusById` styling already built in 6.2,
+  and the canvas turns read-only while a proposal is open, so an edit can't race
+  the merge.
+- Structured output copes badly with discriminated unions, so the model is asked
+  for a FLAT draft operation shape (`ai/change-prompt.ts`) that
+  `propose-change.ts` then validates and narrows itself: it drops operations
+  referencing unknown component ids, self-links and empty modifies, resolves
+  citations, and lays out new components with the server layout. Assume the model
+  will invent ids; the validation layer is what makes the feature safe, and the
+  fake generator deliberately proposes a bad connection so that path stays tested.
+- Real-model hand-check (the tests all use the fake generator, so they prove the
+  plumbing, not the suggestion quality): "add live chat between users" returned a
+  dedicated WebSocket chat service, a Cassandra store for append-heavy message
+  logs, Redis pub/sub for presence and three connections (24s, 2/5 operations
+  cited a source; connection operations rarely cite, which is expected).
+  "drop the cache layer" correctly returned remove_connection + remove_component
+  and nothing else. Re-run a check like this after any change-prompt edit.
 - Deleting a component must also drop its connections and data-model entries, or
   the design fails `designSchema`'s referential checks on save.
 - NEVER write files containing non-ASCII (…, ·) with PowerShell `Set-Content`:

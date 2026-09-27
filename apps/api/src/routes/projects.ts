@@ -1,9 +1,14 @@
 import {
+  acceptChangeRequestSchema,
+  applyChangeOperations,
+  changeOperationSchema,
+  createChangeRequestSchema,
   createProjectRequestSchema,
   designSchema,
   projectNameFromRequirements,
   requirementsSchema,
   saveEditsRequestSchema,
+  type ChangeProposalResponse,
   type Design,
   type ListProjectsResponse,
   type ListVersionsResponse,
@@ -16,8 +21,9 @@ import { GenerationError } from '../ai/design-generator';
 import { assertWithinDailyAiLimit, recordAiRequest } from '../ai/usage';
 import { currentUser } from '../auth/require-auth';
 import { db, type Database } from '../db/client';
-import { designVersions, projects } from '../db/schema';
+import { changeProposals, designVersions, projects } from '../db/schema';
 import { generateDesign } from '../designs/generate-design';
+import { proposeChange } from '../designs/propose-change';
 import { describeManualEdit, loadVersion, saveNewVersion } from '../designs/versions';
 import type { AppDependencies } from '../deps';
 import { HttpError } from '../errors';
@@ -30,6 +36,38 @@ function parseProjectId(value: string | undefined, message = 'Design not found.'
   const parsed = z.uuid().safeParse(value);
   if (!parsed.success) throw new HttpError(404, 'not_found', message);
   return parsed.data;
+}
+
+/** A pending proposal belonging to this user's project, with the live version id. */
+async function loadPendingProposal(
+  db: Database,
+  projectId: string,
+  userId: string,
+  proposalId: string,
+) {
+  const [row] = await db
+    .select({ proposal: changeProposals, currentVersionId: projects.currentVersionId })
+    .from(changeProposals)
+    .innerJoin(projects, eq(projects.id, changeProposals.projectId))
+    .where(
+      and(
+        eq(changeProposals.id, proposalId),
+        eq(changeProposals.projectId, projectId),
+        eq(projects.userId, userId),
+      ),
+    )
+    .limit(1);
+
+  if (!row) throw new HttpError(404, 'not_found', 'Proposal not found.');
+  if (row.proposal.status !== 'pending') {
+    throw new HttpError(409, 'already_decided', 'This proposal has already been decided.');
+  }
+
+  return {
+    ...row.proposal,
+    operations: z.array(changeOperationSchema).parse(row.proposal.operations),
+    currentVersionId: row.currentVersionId,
+  };
 }
 
 /** The design currently pointed at by the project, for diffing a save against. */
@@ -45,7 +83,11 @@ async function loadCurrentDesign(db: Database, projectId: string, userId: string
   return designSchema.parse(row.designJson);
 }
 
-export function createProjectsRouter({ embedder, designGenerator }: AppDependencies) {
+export function createProjectsRouter({
+  embedder,
+  designGenerator,
+  changeGenerator,
+}: AppDependencies) {
   const router = Router();
 
   // Every query here MUST be scoped to currentUser(req).id. That is what keeps
@@ -193,6 +235,160 @@ export function createProjectsRouter({ embedder, designGenerator }: AppDependenc
       changeSummary: summary,
     });
     res.status(201).json(project);
+  });
+
+  /**
+   * Ask for a change in plain language. This NEVER modifies the design: it
+   * stores a proposal for the user to accept or reject.
+   */
+  router.post('/:projectId/change-request', async (req, res) => {
+    const user = currentUser(req);
+    const projectId = parseProjectId(req.params.projectId);
+
+    const parsed = createChangeRequestSchema.safeParse(req.body);
+    if (!parsed.success) {
+      const [issue] = parsed.error.issues;
+      throw new HttpError(400, 'validation_error', issue?.message ?? 'Invalid request.');
+    }
+
+    await assertWithinDailyAiLimit(db, user.id);
+
+    const [row] = await db
+      .select({ versionId: designVersions.id, designJson: designVersions.designJson })
+      .from(projects)
+      .innerJoin(designVersions, eq(designVersions.id, projects.currentVersionId))
+      .where(and(eq(projects.id, projectId), eq(projects.userId, user.id)))
+      .limit(1);
+    if (!row) throw new HttpError(404, 'not_found', 'Design not found.');
+
+    const design = designSchema.parse(row.designJson);
+    const timeout = AbortSignal.timeout(GENERATION_TIMEOUT_MS);
+
+    let proposed;
+    try {
+      proposed = await proposeChange(
+        db,
+        embedder,
+        changeGenerator,
+        design,
+        parsed.data.prompt,
+        timeout,
+      );
+    } catch (error) {
+      if (error instanceof GenerationError) {
+        throw new HttpError(502, 'generation_failed', error.message);
+      }
+      if (error instanceof Error && error.name === 'TimeoutError') {
+        throw new HttpError(504, 'generation_timeout', 'That took too long. Please try again.');
+      }
+      throw error;
+    }
+
+    const [stored] = await db
+      .insert(changeProposals)
+      .values({
+        projectId,
+        baseVersionId: row.versionId,
+        prompt: parsed.data.prompt,
+        summary: proposed.summary,
+        operations: proposed.operations,
+        model: proposed.model,
+      })
+      .returning();
+    if (!stored) throw new Error('Insert returned no change proposal row');
+
+    await recordAiRequest(db, user.id, 'change_request', proposed.model);
+
+    const body: ChangeProposalResponse = {
+      proposal: {
+        id: stored.id,
+        prompt: stored.prompt,
+        summary: stored.summary,
+        baseVersionId: row.versionId,
+        operations: proposed.operations,
+      },
+    };
+    res.status(201).json(body);
+  });
+
+  /** Apply the operations the user accepted, as a new version. */
+  router.post('/:projectId/change-request/:proposalId/accept', async (req, res) => {
+    const user = currentUser(req);
+    const projectId = parseProjectId(req.params.projectId);
+    const proposalId = parseProjectId(req.params.proposalId, 'Proposal not found.');
+
+    const parsed = acceptChangeRequestSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw new HttpError(400, 'validation_error', 'Choose at least one change to accept.');
+    }
+
+    const proposal = await loadPendingProposal(db, projectId, user.id, proposalId);
+    const current = await loadCurrentDesign(db, projectId, user.id);
+
+    // The design must not have moved on since the proposal was made.
+    if (proposal.baseVersionId !== proposal.currentVersionId) {
+      throw new HttpError(
+        409,
+        'stale_proposal',
+        'This design changed after the proposal was made. Ask for the change again.',
+      );
+    }
+
+    const chosen = proposal.operations.filter((operation) =>
+      parsed.data.operationIds.includes(operation.id),
+    );
+    if (chosen.length === 0) {
+      throw new HttpError(
+        400,
+        'validation_error',
+        'None of those changes belong to this proposal.',
+      );
+    }
+
+    const { design: merged, skipped } = applyChangeOperations(current, chosen);
+    const validated = designSchema.safeParse(merged);
+    if (!validated.success) {
+      const [issue] = validated.error.issues;
+      throw new HttpError(
+        422,
+        'invalid_result',
+        `Those changes would leave the design inconsistent (${issue ? issue.message : 'unknown problem'}).`,
+      );
+    }
+
+    const acceptedAll = chosen.length === proposal.operations.length;
+    const project = await saveNewVersion(db, {
+      projectId,
+      userId: user.id,
+      design: validated.data,
+      changeSummary: `${proposal.prompt} (accepted ${String(chosen.length)} of ${String(proposal.operations.length)} change${proposal.operations.length === 1 ? '' : 's'})`,
+      generatorModel: proposal.model,
+    });
+
+    await db
+      .update(changeProposals)
+      .set({ status: acceptedAll ? 'accepted' : 'partially_accepted', updatedAt: new Date() })
+      .where(eq(changeProposals.id, proposalId));
+
+    if (skipped.length > 0) {
+      req.log.warn({ skipped }, 'Some accepted operations no longer applied');
+    }
+    res.status(201).json(project);
+  });
+
+  /** Discard a proposal. The design is untouched. */
+  router.post('/:projectId/change-request/:proposalId/reject', async (req, res) => {
+    const user = currentUser(req);
+    const projectId = parseProjectId(req.params.projectId);
+    const proposalId = parseProjectId(req.params.proposalId, 'Proposal not found.');
+
+    await loadPendingProposal(db, projectId, user.id, proposalId);
+    await db
+      .update(changeProposals)
+      .set({ status: 'rejected', updatedAt: new Date() })
+      .where(eq(changeProposals.id, proposalId));
+
+    res.status(204).send();
   });
 
   /** The version history drawer. */

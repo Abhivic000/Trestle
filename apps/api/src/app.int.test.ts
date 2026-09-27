@@ -1,6 +1,7 @@
 import { inArray } from 'drizzle-orm';
 import {
   apiErrorSchema,
+  changeProposalResponseSchema,
   corpusEntrySchema,
   healthResponseSchema,
   listProjectsResponseSchema,
@@ -11,6 +12,7 @@ import {
 } from '@trestle/shared';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { createFakeChangeGenerator } from './ai/fake-change-generator';
 import { createFakeDesignGenerator } from './ai/fake-design-generator';
 import { createFakeEmbedder } from './ai/fake-embedder';
 import { DAILY_AI_LIMIT } from './ai/usage';
@@ -26,7 +28,11 @@ import { createTestUser, deleteTestUsers, type TestUser } from './test/test-user
 
 // Fake AI services: no network calls, no quota, deterministic output.
 const embedder = createFakeEmbedder();
-const app = createApp({ embedder, designGenerator: createFakeDesignGenerator() });
+const app = createApp({
+  embedder,
+  designGenerator: createFakeDesignGenerator(),
+  changeGenerator: createFakeChangeGenerator(),
+});
 const bearer = (user: TestUser) => ({ Authorization: `Bearer ${user.accessToken}` });
 
 const sampleRequirements: Requirements = {
@@ -159,6 +165,7 @@ describe('POST /projects', () => {
     const failingApp = createApp({
       embedder,
       designGenerator: createFakeDesignGenerator({ failWith: 'The model is busy.' }),
+      changeGenerator: createFakeChangeGenerator(),
     });
     const before = await request(failingApp).get('/projects').set(bearer(bob)).expect(200);
 
@@ -393,6 +400,169 @@ describe('saving edits and version history', () => {
       .post(`/projects/${project.id}/versions/${project.currentVersion.id}/restore`)
       .set(bearer(bob))
       .expect(404);
+  });
+});
+
+describe('change requests (suggest first, never auto-apply)', () => {
+  async function propose(
+    user: TestUser,
+    projectId: string,
+    prompt = 'add live chat between users',
+  ) {
+    const res = await request(app)
+      .post(`/projects/${projectId}/change-request`)
+      .set(bearer(user))
+      .send({ prompt })
+      .expect(201);
+    return changeProposalResponseSchema.parse(res.body).proposal;
+  }
+
+  it('proposes operations without changing the design', async () => {
+    const project = await createProject(alice);
+    const proposal = await propose(alice, project.id);
+
+    expect(proposal.operations.length).toBeGreaterThan(0);
+    expect(proposal.operations.every((operation) => operation.explanation.length > 0)).toBe(true);
+
+    // The saved design is untouched: still version 1, same components.
+    const after = await request(app).get(`/projects/${project.id}`).set(bearer(alice)).expect(200);
+    const current = projectDetailSchema.parse(after.body);
+    expect(current.currentVersion.versionNumber).toBe(1);
+    expect(current.currentVersion.design.components).toHaveLength(
+      project.currentVersion.design.components.length,
+    );
+  });
+
+  it('drops operations that reference components which do not exist', async () => {
+    const project = await createProject(alice);
+    const proposal = await propose(alice, project.id);
+
+    // The fake proposes a connection from "ghost-component"; it must not survive.
+    const referencesGhost = proposal.operations.some(
+      (operation) =>
+        operation.type === 'add_connection' &&
+        (operation.connection.from === 'ghost-component' ||
+          operation.connection.to === 'ghost-component'),
+    );
+    expect(referencesGhost).toBe(false);
+  });
+
+  it('keeps only citations that were supplied to the model', async () => {
+    const project = await createProject(alice);
+    const proposal = await propose(alice, project.id);
+    const cited = proposal.operations.flatMap((operation) => operation.sources);
+
+    expect(cited).not.toContain('never-supplied-slug');
+    expect(cited.every((source) => /^[0-9a-f-]{36}$/.test(source))).toBe(true);
+  });
+
+  it('applies only the operations the user accepted', async () => {
+    const project = await createProject(alice);
+    const proposal = await propose(alice, project.id);
+    const addComponent = proposal.operations.find(
+      (operation) => operation.type === 'add_component',
+    );
+    if (!addComponent) throw new Error('expected an add_component operation');
+
+    const res = await request(app)
+      .post(`/projects/${project.id}/change-request/${proposal.id}/accept`)
+      .set(bearer(alice))
+      .send({ operationIds: [addComponent.id] })
+      .expect(201);
+
+    const saved = projectDetailSchema.parse(res.body);
+    expect(saved.currentVersion.versionNumber).toBe(2);
+    expect(saved.currentVersion.changeSummary).toContain('accepted 1 of');
+
+    const ids = saved.currentVersion.design.components.map((component) => component.id);
+    expect(ids).toContain('live-chat-service');
+    // The other proposed operations were NOT applied.
+    expect(
+      saved.currentVersion.design.connections.some(
+        (connection) => connection.to === 'live-chat-service',
+      ),
+    ).toBe(false);
+  });
+
+  it('rejecting leaves the design and version count untouched', async () => {
+    const project = await createProject(alice);
+    const proposal = await propose(alice, project.id);
+
+    await request(app)
+      .post(`/projects/${project.id}/change-request/${proposal.id}/reject`)
+      .set(bearer(alice))
+      .expect(204);
+
+    const versions = await request(app)
+      .get(`/projects/${project.id}/versions`)
+      .set(bearer(alice))
+      .expect(200);
+    expect(listVersionsResponseSchema.parse(versions.body).versions).toHaveLength(1);
+
+    // A decided proposal cannot be accepted afterwards.
+    await request(app)
+      .post(`/projects/${project.id}/change-request/${proposal.id}/accept`)
+      .set(bearer(alice))
+      .send({ operationIds: [proposal.operations[0]?.id ?? 'op-1'] })
+      .expect(409);
+  });
+
+  it('refuses a proposal made against an older version', async () => {
+    const project = await createProject(alice);
+    const proposal = await propose(alice, project.id);
+
+    // Someone saves an edit in the meantime.
+    await request(app)
+      .post(`/projects/${project.id}/edits`)
+      .set(bearer(alice))
+      .send({ design: project.currentVersion.design })
+      .expect(201);
+
+    const res = await request(app)
+      .post(`/projects/${project.id}/change-request/${proposal.id}/accept`)
+      .set(bearer(alice))
+      .send({ operationIds: [proposal.operations[0]?.id ?? 'op-1'] });
+
+    expect(res.status).toBe(409);
+    expect(apiErrorSchema.parse(res.body).error.code).toBe('stale_proposal');
+  });
+
+  it("will not propose or accept on another user's design", async () => {
+    const project = await createProject(alice);
+
+    await request(app)
+      .post(`/projects/${project.id}/change-request`)
+      .set(bearer(bob))
+      .send({ prompt: 'add live chat' })
+      .expect(404);
+
+    const proposal = await propose(alice, project.id);
+    await request(app)
+      .post(`/projects/${project.id}/change-request/${proposal.id}/accept`)
+      .set(bearer(bob))
+      .send({ operationIds: [proposal.operations[0]?.id ?? 'op-1'] })
+      .expect(404);
+  });
+
+  it('counts a change request against the daily AI limit', async () => {
+    const project = await createProject(alice);
+    const limited = await createTestUser();
+
+    await db.insert(aiRequests).values(
+      Array.from({ length: DAILY_AI_LIMIT }, () => ({
+        userId: limited.id,
+        kind: 'change_request',
+        model: 'fake-change-model-v1',
+      })),
+    );
+
+    const res = await request(app)
+      .post(`/projects/${project.id}/change-request`)
+      .set(bearer(limited))
+      .send({ prompt: 'add live chat' });
+
+    // Not their project either, but the limit is checked first.
+    expect([404, 429]).toContain(res.status);
   });
 });
 

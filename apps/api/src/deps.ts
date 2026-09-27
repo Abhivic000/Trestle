@@ -1,6 +1,9 @@
 import { createGeminiDesignGenerator } from './ai/gemini-design-generator';
 import { createGeminiEmbedder } from './ai/embeddings';
+import { createGeminiChangeGenerator } from './ai/gemini-change-generator';
+import { createFakeChangeGenerator } from './ai/fake-change-generator';
 import { createFakeDesignGenerator } from './ai/fake-design-generator';
+import type { ChangeGenerator } from './ai/change-generator';
 import { createFakeEmbedder } from './ai/fake-embedder';
 import type { DesignGenerator } from './ai/design-generator';
 import type { Embedder } from './ai/embeddings';
@@ -14,6 +17,7 @@ import { logger } from './logger';
 export interface AppDependencies {
   embedder: Embedder;
   designGenerator: DesignGenerator;
+  changeGenerator: ChangeGenerator;
 }
 
 export function createDefaultDependencies(): AppDependencies {
@@ -22,11 +26,13 @@ export function createDefaultDependencies(): AppDependencies {
     return {
       embedder: createFakeEmbedder(),
       designGenerator: createFakeDesignGenerator(),
+      changeGenerator: createFakeChangeGenerator(),
     };
   }
 
   return {
     embedder: createGeminiEmbedder(env.GEMINI_API_KEY),
     designGenerator: createGeminiDesignGenerator(env.GEMINI_API_KEY),
+    changeGenerator: createGeminiChangeGenerator(env.GEMINI_API_KEY),
   };
 }

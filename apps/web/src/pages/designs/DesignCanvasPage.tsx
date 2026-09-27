@@ -1,5 +1,5 @@
-﻿import { useEffect, useState } from 'react';
-import type { Design } from '@trestle/shared';
+﻿import { useEffect, useState, type FormEvent } from 'react';
+import { buildChangePreview, type ChangeProposal, type Design } from '@trestle/shared';
 import { History, Info, LayoutGrid, LoaderCircle, Monitor, Plus, Undo2 } from 'lucide-react';
 import { Link, useParams } from 'react-router';
 import { ComponentPanel } from '@/canvas/ComponentPanel';
@@ -8,8 +8,15 @@ import { addComponent, updateComponent, type NewComponentInput } from '@/canvas/
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { paths } from '@/lib/paths';
-import { useProject, useSaveEdits } from '@/lib/queries';
+import {
+  useAcceptChange,
+  useProject,
+  useProposeChange,
+  useRejectChange,
+  useSaveEdits,
+} from '@/lib/queries';
 import { AddComponentDialog } from './AddComponentDialog';
+import { ChangeReviewBar } from './ChangeReviewBar';
 import { VersionHistoryDrawer } from './VersionHistoryDrawer';
 
 /**
@@ -30,12 +37,25 @@ export function DesignCanvasPage() {
   const [draft, setDraft] = useState<{ versionId: string; design: Design } | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
+  const [prompt, setPrompt] = useState('');
+  const [proposal, setProposal] = useState<ChangeProposal | null>(null);
+  const [acceptedIds, setAcceptedIds] = useState<string[]>([]);
+
+  const proposeChange = useProposeChange(designId);
+  const acceptChange = useAcceptChange(designId);
+  const rejectChange = useRejectChange(designId);
 
   const currentVersionId = project?.currentVersion.id;
   const saved = project?.currentVersion.design ?? null;
   const liveDraft = draft && draft.versionId === currentVersionId ? draft : null;
-  const design = liveDraft?.design ?? saved;
+  const editedDesign = liveDraft?.design ?? saved;
   const hasUnsavedChanges = liveDraft !== null;
+
+  // While a proposal is open the canvas shows the PREVIEW: the design as it
+  // would be, with additions, changes and removals marked. Nothing is saved.
+  const preview =
+    proposal && editedDesign ? buildChangePreview(editedDesign, proposal.operations) : null;
+  const design = preview?.design ?? editedDesign;
 
   function editDesign(next: Design) {
     if (!currentVersionId) return;
@@ -67,6 +87,30 @@ export function DesignCanvasPage() {
   function handleRename(componentId: string, changes: { label?: string; technology?: string }) {
     if (!design) return;
     editDesign(updateComponent(design, componentId, changes));
+  }
+
+  async function handlePropose(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (prompt.trim().length < 3) return;
+    const { proposal: proposed } = await proposeChange.mutateAsync(prompt.trim());
+    setProposal(proposed);
+    // Everything is ticked by default, but the user can untick any of it.
+    setAcceptedIds(proposed.operations.map((operation) => operation.id));
+    setPrompt('');
+  }
+
+  async function handleAccept() {
+    if (!proposal) return;
+    await acceptChange.mutateAsync({ proposalId: proposal.id, operationIds: acceptedIds });
+    setProposal(null);
+    setAcceptedIds([]);
+  }
+
+  async function handleReject() {
+    if (!proposal) return;
+    await rejectChange.mutateAsync(proposal.id);
+    setProposal(null);
+    setAcceptedIds([]);
   }
 
   return (
@@ -195,6 +239,7 @@ export function DesignCanvasPage() {
                 onSelectComponent={setSelectedComponentId}
                 tidyLayout={tidyLayout}
                 onChange={editDesign}
+                statusById={preview?.statusById}
               />
               <p className="pointer-events-none absolute top-3 left-3 z-10 max-w-md rounded-lg border bg-background/85 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground backdrop-blur-sm">
                 {design.summary}
@@ -217,21 +262,57 @@ export function DesignCanvasPage() {
         </aside>
       </div>
 
-      <div className="flex shrink-0 items-center gap-2.5 border-t border-subtle px-4 py-3.5 sm:px-6">
+      {proposal && (
+        <ChangeReviewBar
+          proposal={proposal}
+          selectedIds={acceptedIds}
+          onToggle={(operationId) => {
+            setAcceptedIds((current) =>
+              current.includes(operationId)
+                ? current.filter((id) => id !== operationId)
+                : [...current, operationId],
+            );
+          }}
+          onAccept={() => void handleAccept()}
+          onReject={() => void handleReject()}
+          isAccepting={acceptChange.isPending}
+          isRejecting={rejectChange.isPending}
+          error={acceptChange.isError ? acceptChange.error.message : null}
+        />
+      )}
+
+      {proposeChange.isError && (
+        <p role="alert" className="bg-danger/10 px-4 py-2 text-xs text-danger sm:px-6">
+          {proposeChange.error.message}
+        </p>
+      )}
+
+      <form
+        onSubmit={(event) => void handlePropose(event)}
+        className="flex shrink-0 items-center gap-2.5 border-t border-subtle px-4 py-3.5 sm:px-6"
+      >
         <span className="hidden shrink-0 rounded-full bg-brand-subtle px-2.5 py-1 text-[11px] font-medium whitespace-nowrap text-brand-soft sm:inline">
-          âœ¦ Add-on
+          ✦ Add-on
         </span>
         <Input
           aria-label="Describe a change"
           placeholder='Ask for a change, e.g. "add live chat between users"'
-          disabled
-          title="Coming soon"
+          value={prompt}
+          onChange={(event) => {
+            setPrompt(event.target.value);
+          }}
+          disabled={!design || proposeChange.isPending || proposal !== null}
           className="h-10"
         />
-        <Button size="lg" disabled className="h-10" title="Coming soon">
-          Suggest
+        <Button
+          type="submit"
+          size="lg"
+          className="h-10"
+          disabled={!design || proposeChange.isPending || proposal !== null || prompt.trim() === ''}
+        >
+          {proposeChange.isPending ? 'Thinking…' : 'Suggest'}
         </Button>
-      </div>
+      </form>
 
       <AddComponentDialog open={addOpen} onOpenChange={setAddOpen} onAdd={handleAdd} />
       {designId && (

@@ -1,4 +1,5 @@
 export * from './api';
+export * from './change-request';
 export * from './corpus';
 export * from './design';
 export * from './design-diff';
