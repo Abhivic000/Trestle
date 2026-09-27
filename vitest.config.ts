@@ -56,6 +56,17 @@ export default defineConfig({
           include: ['src/**/*.test.{ts,tsx}'],
           environment: 'jsdom',
           setupFiles: ['./src/test/setup.ts'],
+          // `src/env.ts` validates the browser configuration when it is
+          // imported, and any component that reaches lib/api pulls it in. Give
+          // the unit tests their own stand-in values so they never depend on a
+          // developer's apps/web/.env: without this they pass locally and fail
+          // in CI, which has no .env file at all. These are not real endpoints
+          // and nothing in a unit test should call them.
+          env: {
+            VITE_API_URL: 'http://localhost:4001',
+            VITE_SUPABASE_URL: 'http://localhost:54321',
+            VITE_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_unit-tests',
+          },
         },
       },
     ],

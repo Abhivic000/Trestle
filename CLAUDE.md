@@ -281,6 +281,13 @@ Phase 6 (main features) runs in steps: 6.1 design contract + intake ✅ ·
   which fails against the placeholder key in `.env.test`.
 - Because the corpus table is shared, integration tests must not assume it holds
   only their own fixtures: the ranking test now filters to its own slugs.
+- WEB UNIT TESTS MUST NOT DEPEND ON `apps/web/.env`. `src/env.ts` validates the
+  browser configuration the moment it is imported, and anything reaching
+  `lib/api` pulls it in, so a test that imports `ApiError` crashes where no
+  `.env` exists. That passes locally (developers have one) and fails in CI,
+  whose checks job writes no env files at all. The `web` project in
+  `vitest.config.ts` now supplies its own stand-in VITE_ values. To reproduce a
+  CI check locally, rename `apps/web/.env` away and run the checks sequence.
 - Deleting a component must also drop its connections and data-model entries, or
   the design fails `designSchema`'s referential checks on save.
 - NEVER write files containing non-ASCII (…, ·) with PowerShell `Set-Content`:
