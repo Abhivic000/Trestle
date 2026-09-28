@@ -39,7 +39,12 @@ function loadEnv(): Env {
     const problems = result.error.issues
       .map((issue) => `  - ${issue.path.join('.')}: ${issue.message}`)
       .join('\n');
-    console.error(`Invalid environment configuration (check your .env file):\n${problems}`);
+    // Names the right place to look: there is no .env file on a hosted server.
+    const where =
+      process.env.NODE_ENV === 'production'
+        ? "check the host's environment settings"
+        : 'check your .env file';
+    console.error(`Invalid environment configuration (${where}):\n${problems}`);
     process.exit(1);
   }
   return result.data;

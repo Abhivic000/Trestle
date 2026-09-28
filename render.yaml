@@ -1,0 +1,73 @@
+# Render Blueprint: the whole deployment described as code.
+#
+# Two services, both on the free plan:
+#   - trestle-api: the Express server, which needs a Node runtime.
+#   - trestle-web: the built React bundle, served as static files.
+#
+# Secrets and the two service URLs are marked `sync: false`: Render asks for
+# them in the dashboard on first deploy and they never appear in this file or
+# in git. See docs/DEPLOYMENT.md for the order to fill them in.
+#
+# Note the free API service sleeps after 15 minutes without traffic and takes
+# about a minute to wake. The web app stays instant either way, because static
+# files are served from a CDN and never sleep.
+
+services:
+  - type: web
+    name: trestle-api
+    runtime: node
+    plan: free
+    # Closest free region to the Supabase project, which is in Tokyo. Every
+    # query crosses this distance, so it is worth not adding to it.
+    region: singapore
+    rootDir: .
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @trestle/api build
+    # Run the bundle directly: no package manager in the boot path.
+    startCommand: node apps/api/dist/index.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: LOG_LEVEL
+        value: info
+      # Never the fake AI in production: it would serve made-up designs.
+      - key: USE_FAKE_AI
+        value: 'false'
+      # Lower than the local default of 20: a public demo spends a free Gemini
+      # quota that is shared by everyone who signs up.
+      - key: AI_DAILY_LIMIT
+        value: '5'
+      # The browser origin allowed to call this API. Paste the trestle-web URL
+      # after its first deploy, with no trailing slash.
+      - key: WEB_ORIGIN
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SECRET_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+
+  - type: web
+    name: trestle-web
+    runtime: static
+    rootDir: .
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @trestle/web build
+    staticPublishPath: apps/web/dist
+    # A single-page app: the browser asks the server for /designs/<id>, which is
+    # not a file. Without this rewrite every deep link and page refresh 404s.
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      # Vite reads these at BUILD time and bakes them into the bundle, so
+      # changing one needs a redeploy, not just a restart.
+      - key: VITE_API_URL
+        sync: false
+      - key: VITE_SUPABASE_URL
+        sync: false
+      - key: VITE_SUPABASE_PUBLISHABLE_KEY
+        sync: false

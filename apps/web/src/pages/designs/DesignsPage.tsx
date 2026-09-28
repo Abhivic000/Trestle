@@ -2,6 +2,7 @@ import { type ProjectSummary } from '@trestle/shared';
 import { LoaderCircle, Network, Plus } from 'lucide-react';
 import { Link } from 'react-router';
 import { Button } from '@/components/ui/button';
+import { WakingServerNotice } from '@/components/WakingServerNotice';
 import { paths } from '@/lib/paths';
 import { useProjects } from '@/lib/queries';
 
@@ -29,9 +30,10 @@ export function DesignsPage() {
 
         <div className="mt-10">
           {isPending && (
-            <div className="flex justify-center py-16" role="status">
+            <div className="flex flex-col items-center py-16" role="status">
               <LoaderCircle className="size-6 animate-spin text-brand" aria-hidden="true" />
               <span className="sr-only">Loading your designs…</span>
+              <WakingServerNotice />
             </div>
           )}
           {error && (

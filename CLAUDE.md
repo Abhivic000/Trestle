@@ -347,6 +347,37 @@ Phase 6 (main features) runs in steps: 6.1 design contract + intake ✅ ·
 TypeScript is pinned to `~6.0.x` because typescript-eslint doesn't support
 TypeScript 7 yet; revisit when it does. `@types/node` tracks Node 24.
 
+Phase 7 (deployment) is configured but NOT yet live: the owner runs the Render
+steps themselves. See `DEPLOYMENT.md` in the repo root (not `docs/`, which is
+git-ignored, and a deploy guide has to be readable from the repository).
+- Both services are described by `render.yaml` as a Render Blueprint:
+  `trestle-api` (Node web service, free) and `trestle-web` (static site, free).
+  Infrastructure as code, so the deployment is reviewable in a diff rather than
+  clicked together in a dashboard.
+- Secrets and the two service URLs are `sync: false`, meaning Render prompts for
+  them and they never enter git. `WEB_ORIGIN` and `VITE_API_URL` cannot be known
+  until each service has deployed once, so they are filled in afterwards.
+  `VITE_*` values are baked in at BUILD time, so changing one needs a redeploy,
+  not a restart.
+- The free API service SLEEPS after 15 minutes idle and takes about a minute to
+  wake. `WakingServerNotice` explains that on screen after 6 seconds rather than
+  spinning silently. Render allows 750 instance hours a month, which is about
+  one always-on service (a 31-day month is 744), so a keep-alive ping would fit
+  but leave no room for a second service; the owner chose to let it sleep.
+- Supabase free allows only 2 ACTIVE PROJECTS per organisation, and both are
+  taken by the dev and `trestle-test` projects. Rather than lose CI, the dev
+  project doubles as production: local development writes to the same database
+  live visitors use. Revisit if the demo ever holds anything that matters.
+- `AI_DAILY_LIMIT` is 5 in `render.yaml` against a local default of 20, because
+  a public demo spends a Gemini free quota shared by everyone who signs up.
+- Email confirmation stays OFF: Supabase's free built-in SMTP only delivers to
+  team members, so enabling it would stop anyone from signing up. Visitors can
+  therefore register with an address they do not own.
+- The API bundle must run standalone (`node apps/api/dist/index.js`) with no
+  `.env` present; tsup bundles `@trestle/shared` in for that reason. Verify a
+  deployment change by running that command with no environment set: it should
+  fail fast listing exactly the variables the host has to provide.
+
 ## Key decisions already made (do not re-litigate without reason)
 
 - **Tech stack**: React + React Flow + Tailwind CSS (frontend) · Node + Express

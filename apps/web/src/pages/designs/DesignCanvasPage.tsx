@@ -13,6 +13,7 @@ import { DesignCanvas } from '@/canvas/DesignCanvas';
 import { addComponent, updateComponent, type NewComponentInput } from '@/canvas/design-edits';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { WakingServerNotice } from '@/components/WakingServerNotice';
 import { paths } from '@/lib/paths';
 import {
   useAcceptChange,
@@ -227,9 +228,13 @@ export function DesignCanvasPage() {
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
         <section aria-label="Design canvas" className="relative min-h-75 min-w-0 flex-1 lg:min-h-0">
           {isPending && (
-            <div className="bg-canvas-grid flex h-full items-center justify-center" role="status">
+            <div
+              className="bg-canvas-grid flex h-full flex-col items-center justify-center"
+              role="status"
+            >
               <LoaderCircle className="size-6 animate-spin text-brand" aria-hidden="true" />
               <span className="sr-only">Loading design…</span>
+              <WakingServerNotice />
             </div>
           )}
 
