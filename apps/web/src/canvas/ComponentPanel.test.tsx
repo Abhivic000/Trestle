@@ -1,4 +1,11 @@
-import { designComponentSchema, type DesignComponent } from '@trestle/shared';
+import {
+  DESIGN_SCHEMA_VERSION,
+  designComponentSchema,
+  designSchema,
+  estimateCapacity,
+  requirementsSchema,
+  type DesignComponent,
+} from '@trestle/shared';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -50,6 +57,46 @@ const component: DesignComponent = designComponentSchema.parse({
   position: { x: 0, y: 0 },
 });
 
+// A real estimate over a small design, so the Cost tab is exercised against
+// the same calculator the app uses rather than a hand-made stub.
+const capacity = estimateCapacity(
+  designSchema.parse({
+    schemaVersion: DESIGN_SCHEMA_VERSION,
+    origin: 'generated',
+    summary: 'A design used for panel tests.',
+    components: [
+      {
+        id: 'cache-redis',
+        kind: 'cache',
+        label: 'Redis cache',
+        responsibility: 'Keeps hot playlists and tracks in memory.',
+        rationale: 'Playback traffic concentrates on a small share of the catalogue.',
+        position: { x: 0, y: 0 },
+      },
+      {
+        id: 'db',
+        kind: 'database',
+        label: 'Primary database',
+        responsibility: 'Stores the catalogue and user data.',
+        rationale: 'Relational storage fits the consistency needs.',
+        position: { x: 296, y: 0 },
+      },
+    ],
+    connections: [],
+    dataModel: [],
+  }),
+  requirementsSchema.parse({
+    projectType: 'streaming',
+    features: ['playback'],
+    dailyActiveUsers: 500_000,
+    trafficShape: 'read_heavy',
+    latencySensitivity: 'medium',
+    consistency: 'eventual',
+    availability: '99.9',
+    budget: 'startup',
+  }),
+);
+
 describe('ComponentPanel', () => {
   beforeEach(() => {
     comparisonsQuery.mockReset();
@@ -90,7 +137,41 @@ describe('ComponentPanel', () => {
     expect(await screen.findByText(/No close match in the reference library/)).toBeInTheDocument();
 
     await user.click(screen.getByRole('tab', { name: 'Cost' }));
-    expect(await screen.findByText(/Cost and scaling estimates/)).toBeInTheDocument();
+    expect(await screen.findByText(/Estimates appear once this design/)).toBeInTheDocument();
+  });
+
+  it('shows traffic, a cost band and the assumptions behind them', async () => {
+    const user = userEvent.setup();
+    render(<ComponentPanel component={component} projectId="p1" capacity={capacity} />);
+
+    await user.click(screen.getByRole('tab', { name: 'Cost' }));
+
+    expect(await screen.findByText('Running cost')).toBeInTheDocument();
+    // The figures are computed, so assert the shape rather than exact numbers.
+    expect(screen.getAllByText(/req\/s/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/\$\d/)).toBeInTheDocument();
+    // The assumptions must always travel with the numbers.
+    expect(screen.getByText(/30 actions per user per day/)).toBeInTheDocument();
+    expect(screen.getByText(/not a quote from any provider/)).toBeInTheDocument();
+  });
+
+  it('warns on the component that growth will strain first', async () => {
+    const user = userEvent.setup();
+    const database = capacity.byComponentId.db;
+    expect(capacity.bottleneck?.componentId).toBe('db');
+    expect(database).toBeDefined();
+
+    render(
+      <ComponentPanel
+        component={{ ...component, id: 'db', kind: 'database', label: 'Primary database' }}
+        projectId="p1"
+        capacity={capacity}
+      />,
+    );
+
+    await user.click(screen.getByRole('tab', { name: 'Cost' }));
+
+    expect(await screen.findByText('First to feel growth')).toBeInTheDocument();
   });
 
   it('shows a matched real system, with its tradeoffs and a link to the source', async () => {

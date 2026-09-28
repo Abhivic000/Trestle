@@ -1,6 +1,6 @@
 ﻿import { describe, expect, it } from 'vitest';
 import { resolveCitations, stripInlineCitations } from './citations';
-import { layoutComponents } from '@trestle/shared';
+import { COLUMN_WIDTH, layoutComponents } from '@trestle/shared';
 
 const entries = [
   { id: '11111111-1111-4111-8111-111111111111', slug: 'caching-read-through' },
@@ -112,9 +112,9 @@ describe('layoutComponents', () => {
       { id: 'db', kind: 'database' },
     ]);
 
+    // Exactly one column apart, whatever the column width happens to be.
     const gap = (positions.db?.x ?? 0) - (positions['client-app']?.x ?? 0);
-    expect(gap).toBeGreaterThan(0);
-    expect(gap).toBeLessThan(400);
+    expect(gap).toBe(COLUMN_WIDTH);
   });
 
   it('gives every component a position', () => {

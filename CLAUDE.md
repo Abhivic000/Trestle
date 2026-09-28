@@ -86,7 +86,7 @@ Phase 5 (end-to-end auth tests) is done:
 Phase 6 (main features) runs in steps: 6.1 design contract + intake ✅ ·
 6.2 canvas ✅ · 6.3 reference library + retrieval ✅ · 6.4 grounded generation ✅ ·
 6.5 edits + version history ✅ · 6.6 change requests (suggest-first diffs) ✅ ·
-6.7 industry comparison ✅ · 6.8 cost & traffic. Cross-cutting decisions:
+6.7 industry comparison ✅ · 6.8 cost & traffic ✅. Cross-cutting decisions:
 - Design JSON contract lives in `packages/shared/src/design.ts`
   (`schemaVersion` 1, components/connections/dataModel, `sources[]` per
   component for grounding, node positions inside the design so versions capture
@@ -182,11 +182,31 @@ Phase 6 (main features) runs in steps: 6.1 design contract + intake ✅ ·
   the text. Edges are smoothstep with arrow markers and labels on opaque pills.
   Technology names get brand icons via `simple-icons` (`technology-icons.ts`);
   there are no Amazon/AWS icons in that set, so those fall back to the role icon.
-- React Flow paints NODES ABOVE EDGE LABELS, so a label wider than the gap
-  between columns is hidden behind a box, not drawn over it. CSS truncation does
-  not help: `shortenEdgeLabel` (`edge-label.ts`) shortens the text itself to 14
-  characters at a word boundary, with the full text in the native `title`.
-  Labels are hidden below 0.55 zoom. `layoutComponents` now lives in
+- CONNECTION LABELS: the fix is SPACE, not stacking order. React Flow puts
+  `.react-flow__edgelabel-renderer` before the nodes layer and neither sets a
+  z-index, so nodes paint over labels and a label wider than the gap between
+  columns showed only its middle. Raising that layer (`z-index: 5` in
+  `index.css`) makes such labels readable but the owner rejected the result:
+  labels sitting on top of boxes, covering component names, looked cluttered.
+  The z-index stays as a safety net, but labels must now FIT IN THE GAP:
+  `COLUMN_WIDTH` is 420 against a 216px node, leaving ~204px of clear air, and
+  `ROW_HEIGHT` is 200. A wider graph is fine because `fitViewOptions` refuses to
+  zoom below 0.6, so a big design opens scrollable at a readable size instead of
+  shrunk to nothing; the owner explicitly prefers scrolling over tiny text.
+- A connection between columns that are NOT neighbours has its midpoint on top
+  of whatever sits between them, which no amount of spacing fixes.
+  `nearestColumnGapCentre` (shared layout) pins those labels to the middle of a
+  gap; connections inside one column keep the path midpoint so the label stays
+  on the line it belongs to.
+- Label length is now a function of zoom (`maxLabelCharsForZoom`): 34 characters
+  zoomed in, 12 zoomed out, hidden below 0.45. Labels scale with the viewport,
+  so a long one is unreadable and crowds the diagram when zoomed out.
+- Verify canvas changes with a throwaway Playwright spec that screenshots the
+  canvas at default, zoomed-in and zoomed-out, and LOOK at the images. This
+  class of bug is invisible to assertions and survived two earlier attempts
+  that were "verified" only by tests passing.
+- Existing designs keep their stored positions, so they stay at the old cramped
+  spacing until "Tidy layout" is used and saved. `layoutComponents` lives in
   `@trestle/shared` so the browser's "Tidy layout" button re-spaces an old design
   with exactly the server's layout (visual only until saving lands in 6.5).
 - The canvas follows normal architecture-diagram conventions: left-to-right
@@ -281,6 +301,32 @@ Phase 6 (main features) runs in steps: 6.1 design contract + intake ✅ ·
   which fails against the placeholder key in `.env.test`.
 - Because the corpus table is shared, integration tests must not assume it holds
   only their own fixtures: the ranking test now filters to its own slugs.
+- Step 6.8: cost & traffic. `packages/shared/src/capacity.ts` is a PURE
+  calculator: no AI, no API call, no stored estimate. The browser recomputes it
+  from the design in front of the user, so manual edits and pending proposals
+  are costed instantly and nothing can go stale. Models are unreliable at
+  arithmetic and will state a confident price with nothing behind it, which is
+  the opposite of what this product claims to do, so this stayed ordinary code.
+- `estimateTraffic` is now the single source of the daily-users-to-requests
+  figures, shared by the generation prompt and the Cost tab so the model and
+  the user can never be shown different numbers.
+- Traffic is modelled by following a request through the system: a CDN absorbs
+  half of reads, a cache answers 80% of what reaches the origin, and only the
+  misses plus every write reach the database. Components of the same kind split
+  their slice. All the assumptions are named constants at the top of the file
+  and are displayed in the Cost tab, because these are our figures, not a
+  vendor's.
+- Costs are provider-neutral monthly BANDS by component kind and size tier, not
+  a named vendor's SKU: prices change constantly and the useful lesson is the
+  shape of the cost. `client` and `external` are deliberately not priced ("we
+  will not guess") and contribute nothing to the total.
+- THE BOTTLENECK IS NOT THE BUSIEST COMPONENT. The first attempt ranked by
+  traffic multiplied by a "hard to scale" weight, and in a read-heavy design it
+  named the CACHE, which takes 90% of reads. That is backwards: the cache is
+  there precisely to absorb that load and is nowhere near its limit. The model
+  now gives each kind a soft ceiling in requests/second and reports whichever
+  component uses the largest FRACTION of its ceiling at ten times today's
+  users. Ratios between the ceilings matter, not their absolute values.
 - WEB UNIT TESTS MUST NOT DEPEND ON `apps/web/.env`. `src/env.ts` validates the
   browser configuration the moment it is imported, and anything reaching
   `lib/api` pulls it in, so a test that imports `ApiError` crashes where no

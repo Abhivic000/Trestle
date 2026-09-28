@@ -34,11 +34,36 @@ export const COLUMN_BY_KIND: Record<ComponentKind, number> = {
   external: 5,
 };
 
-// Nodes are 216px wide. A 296px column leaves ~80px between boxes for the edge
-// label pill, while keeping the whole graph narrow enough that "fit to view"
-// does not shrink the text. 145px rows keep two-line labels from touching.
-const COLUMN_WIDTH = 296;
-const ROW_HEIGHT = 145;
+/** Width of a component box. The canvas must render nodes at exactly this width. */
+export const NODE_WIDTH = 216;
+
+/*
+ * Columns are spaced so a connection label sits in the GAP between two boxes
+ * with clear air either side, never on top of one. An earlier 296px column left
+ * only 80px between boxes, which is narrower than a label, so labels were drawn
+ * over the components and the diagram looked cluttered.
+ *
+ * A wider graph is the right trade here: "fit to view" refuses to zoom below
+ * 0.6, so a big design opens scrollable at a readable size rather than shrunk.
+ */
+export const COLUMN_WIDTH = 420;
+const ROW_HEIGHT = 200;
+
+/** Clear space between one column of boxes and the next. */
+export const COLUMN_GAP = COLUMN_WIDTH - NODE_WIDTH;
+
+/**
+ * Centre of the gap nearest to `x`.
+ *
+ * A connection between columns that are not neighbours has its midpoint on top
+ * of whatever sits between them, so the canvas pins such labels to the middle
+ * of a gap instead, where nothing is drawn.
+ */
+export function nearestColumnGapCentre(x: number): number {
+  const firstGapCentre = NODE_WIDTH + COLUMN_GAP / 2;
+  const gap = Math.max(0, Math.round((x - firstGapCentre) / COLUMN_WIDTH));
+  return gap * COLUMN_WIDTH + firstGapCentre;
+}
 
 export function layoutComponents<T extends { id: string; kind: ComponentKind }>(
   components: T[],

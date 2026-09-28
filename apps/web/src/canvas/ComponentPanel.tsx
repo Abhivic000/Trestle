@@ -1,22 +1,30 @@
 import { useState } from 'react';
-import type { DesignComponent } from '@trestle/shared';
+import type { CapacityEstimate, DesignComponent } from '@trestle/shared';
 import { ShieldAlert } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ComparePanel } from './ComparePanel';
 import { componentKindStyles } from './component-kinds';
+import { CostPanel } from './CostPanel';
 import { TechnologyBadge } from './TechnologyBadge';
 
 interface ComponentPanelProps {
   component: DesignComponent | null;
   /** Needed to look up comparisons for the selected component. */
   projectId?: string;
+  /** Traffic and cost for the whole design; the Cost tab picks out this component. */
+  capacity?: CapacityEstimate | null;
   /** When set, the name and technology become editable. */
   onRename?: (componentId: string, changes: { label?: string; technology?: string }) => void;
 }
 
-/** Side panel: why a component is there, how real systems do it, and cost to follow. */
-export function ComponentPanel({ component, projectId, onRename }: ComponentPanelProps) {
+/** Side panel: why a component is there, how real systems do it, what it costs. */
+export function ComponentPanel({
+  component,
+  projectId,
+  capacity = null,
+  onRename,
+}: ComponentPanelProps) {
   // Tracked so the Compare tab only searches the library once it is opened.
   const [tab, setTab] = useState('rationale');
 
@@ -131,8 +139,8 @@ export function ComponentPanel({ component, projectId, onRename }: ComponentPane
             active={tab === 'compare'}
           />
         </TabsContent>
-        <TabsContent value="cost" className="p-5 text-sm text-tertiary">
-          Cost and scaling estimates for this component will appear here.
+        <TabsContent value="cost">
+          <CostPanel capacity={capacity?.byComponentId[component.id] ?? null} estimate={capacity} />
         </TabsContent>
       </div>
     </Tabs>

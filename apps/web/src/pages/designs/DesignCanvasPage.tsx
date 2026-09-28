@@ -1,5 +1,11 @@
-﻿import { useEffect, useState, type FormEvent } from 'react';
-import { buildChangePreview, type ChangeProposal, type Design } from '@trestle/shared';
+﻿import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import {
+  buildChangePreview,
+  estimateCapacity,
+  formatCostBand,
+  type ChangeProposal,
+  type Design,
+} from '@trestle/shared';
 import { History, Info, LayoutGrid, LoaderCircle, Monitor, Plus, Undo2 } from 'lucide-react';
 import { Link, useParams } from 'react-router';
 import { ComponentPanel } from '@/canvas/ComponentPanel';
@@ -76,6 +82,13 @@ export function DesignCanvasPage() {
 
   const selectedComponent =
     design?.components.find((component) => component.id === selectedComponentId) ?? null;
+
+  // Pure arithmetic over the design in front of the user, so edits and pending
+  // proposals are costed immediately without asking the server or the model.
+  const capacity = useMemo(
+    () => (design && project ? estimateCapacity(design, project.requirements) : null),
+    [design, project],
+  );
 
   function handleAdd(input: NewComponentInput) {
     if (!design) return;
@@ -247,6 +260,17 @@ export function DesignCanvasPage() {
               <p className="pointer-events-none absolute right-3 bottom-3 z-10 rounded-md border bg-background/85 px-2 py-1 font-mono text-[10px] text-tertiary backdrop-blur-sm">
                 drag to move · drag a dot to connect · Delete to remove
               </p>
+              {capacity && (
+                <p
+                  className="pointer-events-none absolute top-3 right-3 z-10 rounded-md border bg-background/85 px-2.5 py-1.5 text-[11px] text-muted-foreground backdrop-blur-sm"
+                  title="Order-of-magnitude estimate for the whole design. Open a component's Cost tab for the assumptions."
+                >
+                  <span className="font-mono text-xs font-semibold text-foreground">
+                    {formatCostBand(capacity.totalMonthlyCost)}
+                  </span>
+                  <span className="ml-1">/ month estimated</span>
+                </p>
+              )}
             </>
           )}
         </section>
@@ -258,6 +282,7 @@ export function DesignCanvasPage() {
           <ComponentPanel
             component={selectedComponent}
             projectId={designId}
+            capacity={capacity}
             onRename={selectedComponent ? handleRename : undefined}
           />
         </aside>

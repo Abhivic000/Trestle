@@ -158,6 +158,19 @@
   background-size: 24px 24px;
 }
 
+/*
+ * React Flow renders connection labels into `.react-flow__edgelabel-renderer`,
+ * which is a sibling of the nodes layer inside the viewport and comes BEFORE it
+ * in the DOM. Neither sets a z-index, so the nodes win and a label wider than
+ * the gap between two columns is drawn underneath the boxes: on a real design
+ * only the few pixels between components stayed visible, which read as text
+ * being cut in half. Lifting the label layer makes a long label sit on top of
+ * the box instead, where it can still be read.
+ */
+.react-flow__edgelabel-renderer {
+  z-index: 5;
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;

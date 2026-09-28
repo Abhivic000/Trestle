@@ -2,6 +2,7 @@ import {
   availabilityTargetLabels,
   budgetTierLabels,
   complianceNeedLabels,
+  estimateTraffic,
   projectTypeLabels,
   trafficShapeLabels,
   type CorpusSearchResult,
@@ -82,9 +83,8 @@ export function buildDesignPrompt(
 
   // A rough shared starting point, so the model reasons about requests per
   // second rather than about a vague "500,000 users". Stated as an assumption.
-  const actionsPerUserPerDay = 30;
-  const averageRps = Math.round((requirements.dailyActiveUsers * actionsPerUserPerDay) / 86_400);
-  const peakRps = averageRps * 5;
+  // Same calculation the Cost tab shows the user, so the two never disagree.
+  const { actionsPerUserPerDay, averageRps, peakRps } = estimateTraffic(requirements);
 
   const requirementLines = [
     `Project type: ${projectType}`,

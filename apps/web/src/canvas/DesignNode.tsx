@@ -1,11 +1,12 @@
-﻿import { Handle, Position, type NodeProps } from '@xyflow/react';
+﻿import { NODE_WIDTH } from '@trestle/shared';
+import { Handle, Position, type NodeProps } from '@xyflow/react';
 import { cn } from '@/lib/utils';
 import { componentKindStyles } from './component-kinds';
 import type { DesignFlowNode } from './design-to-flow';
 import { TechnologyBadge } from './TechnologyBadge';
 
-/** Width must match NODE_WIDTH in the server-side layout so columns line up. */
-export const NODE_WIDTH = 216;
+/** Re-exported from the shared layout, so canvas and server agree on columns. */
+export { NODE_WIDTH };
 
 /** One box on the canvas. Dashed amber styling marks a proposed change (step 6.6). */
 export function DesignNode({ data, selected }: NodeProps<DesignFlowNode>) {

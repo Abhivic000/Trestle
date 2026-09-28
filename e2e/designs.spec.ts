@@ -179,6 +179,31 @@ test('the Compare tab shows a real system, or admits there is no close match', a
   await expect(panel.getByText(/No close match in the reference library/)).toBeVisible();
 });
 
+test('the Cost tab estimates traffic and spend, with its assumptions', async ({ page }) => {
+  await signInAsNewUser(page);
+  await page.goto('/designs/new');
+  await page.getByLabel('Core features').fill('playback');
+  await page.getByRole('button', { name: 'Create design' }).click();
+  await page.waitForURL(/\/designs\/[0-9a-f-]{36}$/);
+
+  // The whole-design total sits on the canvas.
+  await expect(page.getByText(/\/ month estimated/)).toBeVisible();
+
+  const panel = page.getByRole('complementary', { name: 'Component details' });
+  await page.getByText('Primary database').click();
+  await panel.getByRole('tab', { name: 'Cost' }).click();
+
+  await expect(panel.getByText('Running cost')).toBeVisible();
+  await expect(panel.getByText(/req\/s/).first()).toBeVisible();
+  // The assumptions must be on screen with the numbers, never implied.
+  await expect(panel.getByText(/actions per user per day/)).toBeVisible();
+  await expect(panel.getByText(/not a quote from any provider/)).toBeVisible();
+
+  // A client costs nothing to serve, and we say so rather than inventing a price.
+  await page.getByText('Web & Mobile Clients').click();
+  await expect(panel.getByText(/costs you nothing to serve/)).toBeVisible();
+});
+
 test("another user's design is not reachable by URL", async ({ page, browser }) => {
   // First user creates a design and we note its address.
   await signInAsNewUser(page);
