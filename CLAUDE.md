@@ -373,6 +373,15 @@ git-ignored, and a deploy guide has to be readable from the repository).
 - Email confirmation stays OFF: Supabase's free built-in SMTP only delivers to
   team members, so enabling it would stop anyone from signing up. Visitors can
   therefore register with an address they do not own.
+- RENDER BUILD COMMANDS: never a bare `corepack enable`. Render ships pnpm at
+  `/usr/bin/pnpm` on a read-only filesystem, so corepack fails with
+  `EROFS: read-only file system, unlink '/usr/bin/pnpm'` and the deploy dies
+  before installing anything. Both services install corepack's shims into
+  `/tmp/corepack` (the directory must be created first, or corepack fails with
+  ENOENT) and prefix `PATH` per command, which also pins pnpm to the exact
+  `packageManager` version instead of the build image's. `pnpm install` passes
+  `--prod=false` because the API service runs with `NODE_ENV=production` and the
+  build needs devDependencies (tsup, vite, typescript).
 - The API bundle must run standalone (`node apps/api/dist/index.js`) with no
   `.env` present; tsup bundles `@trestle/shared` in for that reason. Verify a
   deployment change by running that command with no environment set: it should

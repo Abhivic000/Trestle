@@ -94,6 +94,21 @@ been told about.
 If sign-in works but nothing loads, it is almost always `WEB_ORIGIN`: check the
 browser console for a CORS error, and check for a trailing slash.
 
+## If the build fails
+
+**`EROFS: read-only file system, unlink '/usr/bin/pnpm'`** — something ran a
+bare `corepack enable`. Render already has pnpm at `/usr/bin/pnpm` on a
+read-only path, and corepack tries to replace it. The build command in
+`render.yaml` installs corepack's shims into `/tmp/corepack` instead and puts
+that first on `PATH`, which also pins pnpm to the exact version in
+`packageManager` rather than whatever the build image ships. Note that the
+directory has to exist first: `corepack enable --install-directory` fails with
+`ENOENT` if it does not.
+
+**`tsup: not found`, `vite: not found`, or a missing TypeScript** — the install
+skipped devDependencies. The API service sets `NODE_ENV=production`, so the
+install passes `--prod=false` explicitly to keep the build tools.
+
 ## Deploying again
 
 Pushing to the default branch redeploys both services. `render.yaml` is read on

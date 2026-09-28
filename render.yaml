@@ -21,7 +21,18 @@ services:
     # query crosses this distance, so it is worth not adding to it.
     region: singapore
     rootDir: .
-    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @trestle/api build
+    # `corepack enable` on its own fails here: it tries to replace Render's
+    # preinstalled pnpm at /usr/bin/pnpm, which is on a read-only filesystem
+    # (EROFS). Installing the shims somewhere writable and putting that first on
+    # PATH gets the exact pnpm from `packageManager` in package.json instead of
+    # whatever version the build image happens to ship.
+    # `--prod=false` is explicit because the build needs devDependencies
+    # (tsup, vite, typescript) and this service sets NODE_ENV=production.
+    buildCommand: >-
+      mkdir -p /tmp/corepack &&
+      corepack enable --install-directory /tmp/corepack &&
+      PATH=/tmp/corepack:$PATH pnpm install --frozen-lockfile --prod=false &&
+      PATH=/tmp/corepack:$PATH pnpm --filter @trestle/api build
     # Run the bundle directly: no package manager in the boot path.
     startCommand: node apps/api/dist/index.js
     healthCheckPath: /health
@@ -54,7 +65,12 @@ services:
     name: trestle-web
     runtime: static
     rootDir: .
-    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @trestle/web build
+    # Same as the API: corepack's shims go somewhere writable. See the note there.
+    buildCommand: >-
+      mkdir -p /tmp/corepack &&
+      corepack enable --install-directory /tmp/corepack &&
+      PATH=/tmp/corepack:$PATH pnpm install --frozen-lockfile --prod=false &&
+      PATH=/tmp/corepack:$PATH pnpm --filter @trestle/web build
     staticPublishPath: apps/web/dist
     # A single-page app: the browser asks the server for /designs/<id>, which is
     # not a file. Without this rewrite every deep link and page refresh 404s.
